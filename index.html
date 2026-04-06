@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sound Journey</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main id="app">
+    <!-- SCENE 1 -->
+    <section id="scene-1" class="scene">
+      <div id="p5-container"></div>
+
+      <div id="scene-1-overlay" class="scene-overlay">
+        <div class="scene-content">
+          <p class="scene-label">SCENE 1</p>
+          <h1>Dream / Childhood Memory</h1>
+          <p class="scene-description">
+            A warm, living memory. Click the glowing points to awaken fragments of childhood.
+          </p>
+          <button id="start-btn">Enter Memory</button>
+        </div>
+      </div>
+
+      <div id="scene-1-hint" class="hint-chip hidden">
+        Hover and click the glowing memory points
+      </div>
+
+      <div id="scene-1-thought-sun" class="thought-block thought-scene-1 thought-sun">
+        <p>[Scene 1 thought placeholder — Sun]</p>
+      </div>
+
+      <div id="scene-1-thought-farm" class="thought-block thought-scene-1 thought-farm">
+        <p>[Scene 1 thought placeholder — Farm]</p>
+      </div>
+
+      <div id="scene-1-thought-kids" class="thought-block thought-scene-1 thought-kids">
+        <p>[Scene 1 thought placeholder — Kids]</p>
+      </div>
+    </section>
+
+    <!-- SCENE 2 -->
+    <section id="scene-2" class="scene scene-wake">
+      <div id="scene-2-container"></div>
+
+      <div class="scene-corner-label">SCENE 2</div>
+
+      <div id="scene-2-hint" class="hint-chip hidden">
+        Hover and click the glowing points
+      </div>
+
+      <div id="scene-2-thought-water" class="thought-block thought-scene-2 thought-water">
+        <p>[Scene 2 thought placeholder — Tap Water]</p>
+      </div>
+
+      <div id="scene-2-thought-toaster" class="thought-block thought-scene-2 thought-toaster">
+        <p>[Scene 2 thought placeholder — Toaster]</p>
+      </div>
+
+      <div id="scene-2-thought-drawer" class="thought-block thought-scene-2 thought-drawer">
+        <p>[Scene 2 thought placeholder — Drawer]</p>
+      </div>
+    </section>
+
+    <!-- SCENE 7 -->
+    <section id="scene-7" class="scene">
+      <div id="scene-7-container"></div>
+
+      <button id="scene-7-restart-btn" class="scene-7-restart-btn" type="button">
+        Restart Story
+      </button>
+
+      <div id="scene-7-text-1" class="scene-7-text-box">
+        <p>[Scene 7 text 1]</p>
+      </div>
+
+      <div id="scene-7-text-2" class="scene-7-text-box">
+        <p>[Scene 7 text 2]</p>
+      </div>
+
+      <div id="scene-7-text-3" class="scene-7-text-box">
+        <p>[Scene 7 text 3]</p>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/p5@1.9.4/lib/p5.min.js"></script>
+  <script src="sketch.js"></script>
+</body>
+</html>
