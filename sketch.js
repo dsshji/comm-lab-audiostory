@@ -33,9 +33,9 @@ const SCENE2_AUDIO_PATHS = {
   alarm: "sounds/scene1/digitalalarm_long.mp3",
   ambient: "",
   water: "sounds/scene2/tap.mp3",
-  toaster: "",
+  toaster: "sounds/scene2/toaster.mp3",
   drawer: "sounds/scene2/keys.mp3",
-  door: ""
+  door: "sounds/scene2/door.mp3"
 };
 
 /*
@@ -50,6 +50,40 @@ const NODE_COOLDOWN_MS = 700;
   Scene 2 reads it and starts its alarm.
 */
 let scene2AlarmShouldPlay = false;
+let scene3ScrollLocked = false;
+
+const SCENE_LOCK_KEYS = [
+  "ArrowUp",
+  "ArrowDown",
+  "PageUp",
+  "PageDown",
+  "Home",
+  "End",
+  " ",
+  "Spacebar"
+];
+
+function setScene3ScrollLock(locked) {
+  scene3ScrollLocked = locked;
+  const appEl = document.getElementById("app");
+  if (appEl) appEl.style.overflowY = locked ? "hidden" : "auto";
+}
+
+window.addEventListener("wheel", function (event) {
+  if (!scene3ScrollLocked) return;
+  event.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchmove", function (event) {
+  if (!scene3ScrollLocked) return;
+  event.preventDefault();
+}, { passive: false });
+
+window.addEventListener("keydown", function (event) {
+  if (!scene3ScrollLocked) return;
+  if (!SCENE_LOCK_KEYS.includes(event.key)) return;
+  event.preventDefault();
+});
 
 /* =========================================================
    SHARED HELPERS
@@ -277,7 +311,6 @@ class SimpleGrassBlade {
     p.noStroke();
   }
 }
-
 /*
   Shared interactive node class.
 
@@ -485,6 +518,52 @@ class AudioChannel {
   }
 }
 
+/*
+  Detached one-shot helper.
+
+  This is important for Scene 2 toaster and drawer:
+  the sound must play in full and not get cut off by any fade logic.
+*/
+class DetachedAudioChannel {
+  constructor(src, maxVolume = 0.5) {
+    this.src = src;
+    this.maxVolume = maxVolume;
+    this.seedAudio = null;
+
+    if (src && src.trim() !== "") {
+      this.seedAudio = new Audio(src);
+      this.seedAudio.preload = "auto";
+      this.seedAudio.playsInline = true;
+      this.seedAudio.crossOrigin = "anonymous";
+      this.seedAudio.volume = maxVolume;
+    }
+  }
+
+  arm() {
+    if (!this.seedAudio) return;
+
+    this.seedAudio.load();
+
+    this.seedAudio.play().then(() => {
+      this.seedAudio.pause();
+      this.seedAudio.currentTime = 0;
+    }).catch(() => {});
+  }
+
+  playDetachedOnce() {
+    if (!this.seedAudio) return;
+
+    const clone = this.seedAudio.cloneNode(true);
+    clone.volume = this.maxVolume;
+    clone.currentTime = 0;
+    clone.play().catch((err) => {
+      console.warn("Detached audio failed:", this.src, err);
+    });
+  }
+
+  reset() {}
+}
+
 /* =========================================================
    SCENE 1 — DREAM / CHILDHOOD MEMORY
 ========================================================= */
@@ -528,19 +607,6 @@ let audioManager;
   Main state object for Scene 1.
 
   The transition sub-object is the key part for scene switching.
-
-  Important fields:
-  - active:
-      true once transition has started.
-      This is the main flag that blocks new Scene 1 interaction.
-  - startTime:
-      timestamp for when transition began.
-  - flashAlpha:
-      white flash intensity near the end of transition.
-  - autoScrolled:
-      prevents repeated scrollIntoView calls.
-  - scene2Triggered:
-      prevents Scene 2 activation / audio handoff from happening twice.
 */
 let appState = {
   started: false,
@@ -564,7 +630,7 @@ let appState = {
     kids: 0,
     transition: 0
   },
-  transition: {
+    transition: {
     active: false,
     startTime: 0,
     flashAlpha: 0,
@@ -796,7 +862,7 @@ function drawScene1TransitionAlarm(t) {
   if (!appState.transition.active) return;
 
   const elapsed = millis() - appState.transition.startTime;
-  const progress = constrain(elapsed / 10000, 0, 1);
+  const progress = constrain(elapsed / 5000, 0, 1);
 
   const cx = width * 0.22;
   const cy = height * 0.20;
@@ -835,7 +901,6 @@ function drawScene1TransitionAlarm(t) {
   ellipse(cx, cy, 120 + progress * 120, 80 + progress * 80);
   noStroke();
 }
-
 /*
   Updates hover states and draws Scene 1 nodes.
 
@@ -900,6 +965,7 @@ function resetScene1() {
   appState.transition.autoScrolled = false;
   appState.transition.scene2Triggered = false;
   scene2AlarmShouldPlay = false;
+  setScene3ScrollLock(false);
 
   syncScene1Thoughts();
 
@@ -928,22 +994,8 @@ function syncScene1Thoughts() {
 /*
   Activates a Scene 1 memory node.
 
-  This is one of the key functions for understanding interaction flow.
-
-  For normal memories:
-  - marks them clicked
-  - fades their visual in
-  - shows related thought bubble
-
   For the special "transition" node:
   - starts the Scene 1 -> Scene 2 transition
-  - stores the start time
-  - resets transition-specific flags
-  - starts the transition alarm sound
-
-  IMPORTANT BLOCKING:
-  - if transition is already active, this function returns immediately
-  - this prevents the transition from being started twice
 */
 function activateScene1Memory(memoryId) {
   if (!appState.started) return;
@@ -981,26 +1033,6 @@ function updateScene1Fades() {
 
 /*
   Controls the full Scene 1 -> Scene 2 transition animation and handoff.
-
-  This is the MOST IMPORTANT function for scene switching.
-
-  HOW THE SCENE SWITCH ANIMATION WORKS:
-  1. When transition.active becomes true, this starts running every frame.
-  2. elapsed = current time - transition.startTime
-  3. progress = elapsed / 10000, so the transition lasts 10 seconds
-  4. During that time:
-     - the alarm visual shakes more and more
-     - flashAlpha increases near the end
-  5. At 10 seconds:
-     - all Scene 1 audio is hard-stopped
-     - scene2AlarmShouldPlay becomes true
-     - page scroll unlocks
-     - Scene 2 is scrolled into view
-
-  HOW THE TRANSITION IS BLOCKED:
-  - transition.active blocks new Scene 1 clicks
-  - scene2Triggered ensures Scene 2 handoff happens only once
-  - autoScrolled ensures scrollIntoView runs only once
 */
 function updateTransitionState() {
   if (!appState.transition.active) {
@@ -1021,7 +1053,7 @@ function updateTransitionState() {
     This block executes only once.
     It hands control from Scene 1 to Scene 2.
   */
-  if (elapsed >= 10000 && !appState.transition.scene2Triggered) {
+  if (elapsed >= 5000 && !appState.transition.scene2Triggered) {
     appState.transition.scene2Triggered = true;
 
     if (audioManager) {
@@ -1035,7 +1067,7 @@ function updateTransitionState() {
     This block also executes only once.
     It unlocks scroll and moves the user to Scene 2.
   */
-  if (elapsed >= 10000 && !appState.transition.autoScrolled) {
+  if (elapsed >= 5000 && !appState.transition.autoScrolled) {
     appState.transition.autoScrolled = true;
     appState.transition.flashAlpha = 255;
 
@@ -1050,14 +1082,6 @@ function updateTransitionState() {
 
 /*
   Updates mouse cursor in Scene 1.
-
-  Cursor becomes a hand only when:
-  - scene is started
-  - a node is hoverable
-  - cooldown has passed
-  - transition is not active
-
-  This also visually reinforces that interaction is blocked during transition.
 */
 function updateScene1Cursor() {
   if (!appState.started) {
@@ -1074,16 +1098,6 @@ function updateScene1Cursor() {
 
 /*
   Main click handler for Scene 1.
-
-  This is another important place where interaction is blocked.
-
-  Clicks are ignored if:
-  - mouse is outside canvas
-  - Scene 1 is not visible
-  - cooldown is active
-  - transition is active
-
-  That last check is the main "do not let user click anything during transition" rule.
 */
 function mousePressed() {
   if (!insideCanvas(this) || !isSceneVisible(scene1El)) return false;
@@ -1118,16 +1132,6 @@ function windowResized() {
 
 /*
   Scene 1 audio manager.
-
-  It manages:
-  - ambient
-  - sun / farm / kids sound layers
-  - transition alarm
-
-  Important methods:
-  - enable()
-  - startTransitionAlarm()
-  - stopForScene2()
 */
 class MemoryAudioManager {
   constructor(paths) {
@@ -1158,8 +1162,7 @@ class MemoryAudioManager {
     this.channels.transitionAlarm.immediateStop();
     this.channels.transitionAlarm.setTarget(0.02);
   }
-
-  /*
+    /*
     Hard-stops all Scene 1 sounds when entering Scene 2.
 
     This is the key anti-overlap audio function.
@@ -1235,12 +1238,6 @@ new p5(function (p) {
 
   /*
     Main Scene 2 state.
-
-    Important logic:
-    - alarmActive: Scene 2 alarm is currently ringing
-    - alarmStopped: user has turned the alarm off
-    - doorVisible: door appears once all 3 interactions are done
-    - doorTransitioning: prevents repeated door transition trigger
   */
   let state2 = {
     started: true,
@@ -1303,16 +1300,6 @@ new p5(function (p) {
 
   /*
     Main draw loop for Scene 2.
-
-    Flow:
-    1. If Scene 1 finished transition, scene2AlarmShouldPlay becomes true.
-    2. Scene 2 alarm activates unless user has already stopped it.
-    3. While alarm is active:
-       - only alarm is shown / clickable
-    4. After alarm is stopped:
-       - regular Scene 2 nodes appear
-       - user completes water / toaster / drawer
-       - door appears
   */
   p.draw = function () {
     const t = p.millis();
@@ -1386,7 +1373,6 @@ new p5(function (p) {
 
   /*
     Draws the clickable center alarm for Scene 2.
-    The user must turn this off before any other interaction unlocks.
   */
   function drawAlarm2(t) {
     if (state2.alarmStopped) return;
@@ -1394,8 +1380,7 @@ new p5(function (p) {
     const cx = p.width * 0.5;
     const cy = p.height * 0.5;
     state2.hoverAlarm = p.dist(p.mouseX, p.mouseY, cx, cy) < 68;
-
-    const vx = p.sin(t * 0.05) * 4;
+        const vx = p.sin(t * 0.05) * 4;
     const vy = p.cos(t * 0.045) * 1.6;
 
     p.push();
@@ -1443,10 +1428,6 @@ new p5(function (p) {
 
   /*
     Stops Scene 2 alarm.
-
-    Important:
-    - sets alarmStopped = true so Scene 2 nodes can unlock
-    - also immediately stops the actual sound
   */
   function stopAlarm2() {
     if (!state2.alarmActive || state2.alarmStopped) return;
@@ -1546,7 +1527,6 @@ new p5(function (p) {
 
     Key rule:
     nodes are only interactive after the alarm has been stopped.
-    This is how Scene 2 blocks interaction at the start.
   */
   function drawNodes2() {
     state2.hoverNodeId = null;
@@ -1562,12 +1542,6 @@ new p5(function (p) {
 
   /*
     Activates a Scene 2 interaction.
-
-    Rules:
-    - Scene 2 must be started
-    - alarm must already be stopped
-    - cooldown must be over
-    - node must not have been clicked before
   */
   function activateMemory2(memoryId) {
     if (!state2.started || !state2.alarmStopped) return;
@@ -1609,7 +1583,7 @@ new p5(function (p) {
   }
 
   /*
-    Draws the door that transitions to Scene 7.
+    Draws the door that transitions to Scene 3.
   */
   function drawDoor2() {
     if (!state2.doorVisible) return;
@@ -1618,8 +1592,7 @@ new p5(function (p) {
     const y = p.height * 0.56;
     const w = p.width * 0.10;
     const h = p.height * 0.24;
-
-    state2.doorHovered =
+        state2.doorHovered =
       p.mouseX >= x && p.mouseX <= x + w &&
       p.mouseY >= y && p.mouseY <= y + h &&
       !state2.doorTransitioning;
@@ -1661,9 +1634,6 @@ new p5(function (p) {
 
   /*
     Triggers Scene 2 -> Scene 3 door transition.
-
-    Important:
-    doorTransitioning prevents multiple clicks from triggering it again.
   */
   function triggerDoorTransition2() {
     if (!state2.doorVisible || state2.doorTransitioning) return;
@@ -1674,7 +1644,7 @@ new p5(function (p) {
 
     audioManager2.playDoor();
 
-    if (window.resetScene7Intro) window.resetScene7Intro();
+    if (window.resetScene3Intro) window.resetScene3Intro();
 
     const appEl = document.getElementById("app");
     if (appEl) appEl.style.overflowY = "auto";
@@ -1756,11 +1726,6 @@ new p5(function (p) {
 
   /*
     Main click handler for Scene 2.
-
-    Priority:
-    1. If alarm is active, only the alarm can be clicked.
-    2. If door is visible, door can be clicked.
-    3. Otherwise interaction nodes can be clicked.
   */
   p.mousePressed = function () {
     if (!insideCanvas(p) || !isSceneVisible(sceneEl2)) return false;
@@ -1823,72 +1788,60 @@ new p5(function (p) {
     - door one-shot
   */
   class Scene2AudioManager {
-    constructor(paths) {
-      this.enabled = false;
-      this.channels = {
-        alarm: new AudioChannel(paths.alarm, true, 0.85),
-        ambient: new AudioChannel(paths.ambient, true, 0.16),
-        water: new AudioChannel(paths.water, true, 0.5),
-        toaster: new AudioChannel(paths.toaster, false, 0.5),
-        drawer: new AudioChannel(paths.drawer, false, 0.5),
-        door: new AudioChannel(paths.door, false, 0.7)
-      };
+  constructor(paths) {
+    this.enabled = false;
+    this.channels = {
+      alarm: new AudioChannel(paths.alarm, true, 0.85),
+      ambient: new AudioChannel(paths.ambient, true, 0.16),
+      water: new AudioChannel(paths.water, true, 0.5),
+      toaster: new DetachedAudioChannel(paths.toaster, 0.8),
+      drawer: new DetachedAudioChannel(paths.drawer, 0.8),
+      door: new DetachedAudioChannel(paths.door, 0.7)
+    };
+  }
+
+  enable() {
+    if (this.enabled) return;
+    this.enabled = true;
+    for (const key in this.channels) this.channels[key].arm();
+  }
+
+  stopAlarm() {
+    this.channels.alarm.immediateStop();
+  }
+
+  playDoor() {
+    this.channels.door.playDetachedOnce();
+  }
+
+  setActive(memoryId) {
+    if (memoryId === "toaster") {
+      this.channels.toaster.playDetachedOnce();
     }
-
-    /*
-      Enables / arms all Scene 2 audio channels.
-    */
-    enable() {
-      if (this.enabled) return;
-      this.enabled = true;
-      for (const key in this.channels) this.channels[key].arm();
-    }
-
-    /*
-      Immediately stops the Scene 2 alarm.
-    */
-    stopAlarm() {
-      this.channels.alarm.immediateStop();
-    }
-
-    /*
-      Plays the door sound once.
-    */
-    playDoor() {
-      this.channels.door.playOnce();
-    }
-
-    /*
-      Plays one-shot interaction sounds depending on which memory was triggered.
-    */
-    setActive(memoryId) {
-      if (memoryId === "toaster") this.channels.toaster.playOnce();
-      if (memoryId === "drawer") this.channels.drawer.playOnce();
-    }
-
-    /*
-      Per-frame audio logic for Scene 2.
-    */
-    update(started, alarmActive, alarmStopped, fades) {
-      if (!this.enabled || !started) return;
-
-      this.channels.alarm.setTarget(alarmActive && !alarmStopped ? 0.72 : 0);
-      this.channels.ambient.setTarget(alarmStopped ? 0.12 : 0);
-      this.channels.water.setTarget(alarmStopped ? 0.42 * fades.water : 0);
-      this.channels.toaster.setTarget(0);
-      this.channels.drawer.setTarget(0);
-
-      for (const key in this.channels) this.channels[key].update(p);
-    }
-
-    /*
-      Full reset for Scene 2 audio.
-    */
-    reset() {
-      for (const key in this.channels) this.channels[key].reset();
-      this.enabled = false;
+    if (memoryId === "drawer") {
+      this.channels.drawer.playDetachedOnce();
     }
   }
+
+  update(started, alarmActive, alarmStopped, fades) {
+    if (!this.enabled || !started) return;
+
+    this.channels.alarm.setTarget(alarmActive && !alarmStopped ? 0.72 : 0);
+    this.channels.ambient.setTarget(alarmStopped ? 0.12 : 0);
+    this.channels.water.setTarget(alarmStopped ? 0.42 * fades.water : 0);
+
+    this.channels.alarm.update(p);
+    this.channels.ambient.update(p);
+    this.channels.water.update(p);
+  }
+
+  reset() {
+    for (const key in this.channels) {
+      if (this.channels[key].reset) this.channels[key].reset();
+    }
+    this.enabled = false;
+  }
+}
 }, "scene-2-container");
 
 /* =========================================================
@@ -1896,39 +1849,52 @@ new p5(function (p) {
 ========================================================= */
 
 new p5(function (p) {
+  let sceneEl3;
+  let containerEl3;
+  let thoughtEl3;
+  let enterOfficeBtnEl3;
+
   let carX = [];
   let carY = [];
   let carWidth = [];
   let carHeight = [];
-  let carSpeed = []; 
-  let allCarColors = ['#5E607E', '#828DA9', '#2F4B7C', '#714FA5', '#A0A4B8', '#465A80'];
-  let oneCarColor = []; //stores specifc car's color
+  let carSpeed = [];
+  let allCarColors = ["#5E607E", "#828DA9", "#2F4B7C", "#714FA5", "#A0A4B8", "#465A80"];
+  let oneCarColor = [];
+
   let slowsDown = false;
   let speedMultiplier = 1;
   let pulse = 0;
+  let noteShown = false;
+  let officeButtonShown = false;
+  let heartLocked = false;
+  let slowedAt = 0;
 
-  let trafficLoud = new AudioChannel('sounds/scene3/traffic.mp3', true, 0.8);
-  let heartQuiet = new AudioChannel('sounds/scene3/muffledHeartbeat.mp3', true, 0.5);
-  let heartLoud = new AudioChannel('sounds/scene3/heartbeat.mp3', true, 0.9);
-  let trafficQuiet = new AudioChannel('sounds/scene3/muffledTraffic.mp3', true, 0.4);
+  let trafficLoud = new AudioChannel("sounds/scene3/traffic.mp3", true, 0.8);
+  let heartQuiet = new AudioChannel("sounds/scene3/muffledHeartbeat.mp3", true, 0.5);
+  let heartLoud = new AudioChannel("sounds/scene3/heartbeat.mp3", true, 0.9);
+  let trafficQuiet = new AudioChannel("sounds/scene3/muffledTraffic.mp3", true, 0.4);
 
   p.setup = function() {
-    let container = document.getElementById("scene-3-container");
-    p.createCanvas(container.offsetWidth, container.offsetHeight);
+    sceneEl3 = document.getElementById("scene-3");
+    containerEl3 = document.getElementById("scene-3-container");
+    thoughtEl3 = document.getElementById("scene-3-thought");
+    enterOfficeBtnEl3 = document.getElementById("scene-3-enter-office-btn");
 
-// "arm" them (loads the file into memory)
+    const canvas = p.createCanvas(containerEl3.offsetWidth, containerEl3.offsetHeight);
+    canvas.parent("scene-3-container");
+
     trafficLoud.arm();
     heartQuiet.arm();
     heartLoud.arm();
     trafficQuiet.arm();
 
-    //stops the sounds from playing during scene 1 and 2!
     trafficLoud.setTarget(0);
     heartQuiet.setTarget(0);
     trafficQuiet.setTarget(0);
     heartLoud.setTarget(0);
-    
-    for(let i=0; i < 50; i++){
+
+    for (let i = 0; i < 50; i++) {
       carX[i] = p.random(p.width);
       carY[i] = p.random(p.height);
       carWidth[i] = p.random(300, 500);
@@ -1936,66 +1902,69 @@ new p5(function (p) {
       carSpeed[i] = p.random(2, 8);
       oneCarColor[i] = p.random(allCarColors);
     }
+
+    if (enterOfficeBtnEl3) {
+      enterOfficeBtnEl3.addEventListener("click", goToScene4);
+    }
+
+    resetScene3();
   };
 
   p.draw = function() {
-    p.background('#242A3A');
+    p.background("#242A3A");
 
     trafficLoud.update(p);
     heartQuiet.update(p);
     heartLoud.update(p);
     trafficQuiet.update(p);
 
-    let scene = document.getElementById("scene-3");
-    let position = scene.getBoundingClientRect();
-    
-    //checks if the center of the viewport (windowHeight/2) is inside scene 3
-    let isCentered = (position.top < p.height / 2 && position.bottom > p.height / 2);
+    const position = sceneEl3.getBoundingClientRect();
+    const isCentered = (position.top < window.innerHeight / 2 && position.bottom > window.innerHeight / 2);
 
     if (isCentered) {
       if (!slowsDown) {
-        //normal state sounds
         trafficLoud.setTarget(0.8);
         heartQuiet.setTarget(0.5);
         trafficQuiet.setTarget(0);
         heartLoud.setTarget(0);
       } else {
-        //dissociated state sounds (already handled in mousePressed, 
         trafficLoud.setTarget(0);
         heartQuiet.setTarget(0);
         trafficQuiet.setTarget(0.4);
         heartLoud.setTarget(0.9);
       }
     } else {
-      //if we aren't centered on Scene 3, KILL ALL SOUNDS
       trafficLoud.setTarget(0);
       heartQuiet.setTarget(0);
       trafficQuiet.setTarget(0);
       heartLoud.setTarget(0);
     }
 
-    if (slowsDown == true) {
-      speedMultiplier = 0.1; 
-    } else {
-      speedMultiplier = 1.0; 
-    }
+    speedMultiplier = slowsDown ? 0.1 : 1.0;
 
     displayCars();
     displayHeart();
-    
-  
-    if (slowsDown) {
-      unlockNextScene();
+
+    if (slowsDown && !officeButtonShown) {
+      const elapsed = p.millis() - slowedAt;
+      if (!noteShown) {
+        noteShown = true;
+        if (thoughtEl3) thoughtEl3.classList.add("active");
+      }
+
+      if (elapsed >= 5000) {
+        officeButtonShown = true;
+        if (enterOfficeBtnEl3) enterOfficeBtnEl3.classList.remove("hidden");
+      }
     }
-  
   };
 
-  function displayCars(){
+  function displayCars() {
     p.noStroke();
     for (let i = 0; i < 50; i++) {
-      p.fill(oneCarColor[i]); 
+      p.fill(oneCarColor[i]);
       p.rect(carX[i], carY[i], carWidth[i], carHeight[i], 10);
-      carX[i] = carX[i] + (carSpeed[i] * speedMultiplier); //controls speed of cars
+      carX[i] = carX[i] + (carSpeed[i] * speedMultiplier);
 
       if (carX[i] > p.width) {
         carX[i] = -carWidth[i];
@@ -2006,61 +1975,80 @@ new p5(function (p) {
 
   function displayHeart() {
     p.push();
-    let pulseSpeed; 
+    let pulseSpeed;
 
-    if (slowsDown == true) {
-      pulseSpeed = 0.12; 
-      p.fill('#FF516E');
-      p.drawingContext.shadowColor = '#FF516E'; 
-    } 
-    else {
-      pulseSpeed = 0.04; 
-      p.fill('#FF8A9E');
-      p.drawingContext.shadowColor = '#FF8A9E'; 
+    if (slowsDown === true) {
+      pulseSpeed = 0.12;
+      p.fill("#FF516E");
+      p.drawingContext.shadowColor = "#FF516E";
+    } else {
+      pulseSpeed = 0.04;
+      p.fill("#FF8A9E");
+      p.drawingContext.shadowColor = "#FF8A9E";
     }
-    
-    p.drawingContext.shadowBlur = 25; 
+
+    p.drawingContext.shadowBlur = 25;
     pulse = p.sin(p.frameCount * pulseSpeed) * 15;
-    p.ellipse(p.width/2, p.height/3, 100 + pulse);
+    p.ellipse(p.width / 2, p.height / 3, 100 + pulse);
     p.pop();
   }
 
-  p.mousePressed = function() {
-    let container = document.getElementById("scene-3");
-    let rect = container.getBoundingClientRect();
-    //checks if mouse is actually in scene 3
-    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+  function resetScene3() {
+    slowsDown = false;
+    speedMultiplier = 1;
+    pulse = 0;
+    noteShown = false;
+    officeButtonShown = false;
+    heartLocked = false;
+    slowedAt = 0;
 
-    slowsDown = !slowsDown; 
-    
-    if (slowsDown) {
-      trafficLoud.setTarget(0);  
-      heartQuiet.setTarget(0);
-      trafficQuiet.setTarget(0.4); 
-      heartLoud.setTarget(0.9);
-      
-      let thought = document.getElementById("scene-3-thought");
-      if(thought) thought.classList.add("active");
-    } else {
-      trafficLoud.setTarget(0.8);
-      heartQuiet.setTarget(0.5);
-      trafficQuiet.setTarget(0);
-      heartLoud.setTarget(0);
-    }
-  };
+    if (thoughtEl3) thoughtEl3.classList.remove("active");
+    if (enterOfficeBtnEl3) enterOfficeBtnEl3.classList.add("hidden");
 
-  //goes to next scene, scene 4
-  function unlockNextScene() {
-    const appEl = document.getElementById("app");
-    if (appEl) appEl.style.overflowY = "auto";
+    trafficLoud.setTarget(0);
+    heartQuiet.setTarget(0);
+    trafficQuiet.setTarget(0);
+    heartLoud.setTarget(0);
+    setScene3ScrollLock(true);
   }
 
+  window.resetScene3Intro = resetScene3;
+
+  function goToScene4() {
+    setScene3ScrollLock(false);
+    const scene4 = document.getElementById("scene-4");
+    if (scene4) {
+      scene4.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  p.mousePressed = function() {
+    if (!insideCanvas(p) || !isSceneVisible(sceneEl3)) return false;
+    if (heartLocked) return false;
+
+    const d = p.dist(p.mouseX, p.mouseY, p.width / 2, p.height / 3);
+    if (d > 70) return false;
+
+    slowsDown = true;
+    heartLocked = true;
+    slowedAt = p.millis();
+
+    trafficLoud.setTarget(0);
+    heartQuiet.setTarget(0);
+    trafficQuiet.setTarget(0.4);
+    heartLoud.setTarget(0.9);
+
+    if (thoughtEl3) thoughtEl3.classList.add("active");
+    setScene3ScrollLock(true);
+
+    return false;
+  };
+
   p.windowResized = function() {
-    let container = document.getElementById("scene-3-container");
-    if (container) p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+    if (!containerEl3) return;
+    p.resizeCanvas(containerEl3.offsetWidth, containerEl3.offsetHeight);
   };
 }, "scene-3-container");
-
 
 /* =========================================================
    SCENE 7 — COMING BACK HOME
@@ -2251,6 +2239,7 @@ new p5(function (p) {
     Restarts the entire story journey:
     - Scene 1 reset
     - Scene 2 reset
+    - Scene 3 reset
     - Scene 7 reset
     - scroll back to top / Scene 1
   */
@@ -2260,6 +2249,7 @@ new p5(function (p) {
 
     if (window.resetScene1Story) window.resetScene1Story();
     if (window.resetScene2Story) window.resetScene2Story();
+    if (window.resetScene3Intro) window.resetScene3Intro();
     if (window.resetScene7Intro) window.resetScene7Intro();
 
     if (appEl) {

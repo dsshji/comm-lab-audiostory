@@ -33,6 +33,7 @@ body {
 
 #p5-container,
 #scene-2-container,
+#scene-3-container,
 #scene-7-container {
   position: absolute;
   inset: 0;
@@ -140,6 +141,16 @@ canvas {
     linear-gradient(180deg, #111822 0%, #0c121a 52%, #06090e 100%);
 }
 
+.scene-commute {
+  background: linear-gradient(180deg, #1e2431 0%, #171c27 45%, #10141d 100%);
+}
+
+.scene-office-placeholder {
+  background:
+    radial-gradient(circle at 50% 20%, rgba(210, 220, 236, 0.05), transparent 25%),
+    linear-gradient(180deg, #11161d 0%, #0d1117 100%);
+}
+
 .scene-corner-label {
   position: absolute;
   top: 24px;
@@ -157,8 +168,6 @@ canvas {
   border: 1px solid rgba(226, 234, 245, 0.16);
   color: rgba(245, 248, 255, 0.92);
 }
-
-/* Thought blocks */
 
 .thought-block {
   position: absolute;
@@ -232,7 +241,65 @@ canvas {
   bottom: 11%;
 }
 
-/* Scene 7 */
+.thought-scene-3-center {
+  top: 50%;
+  left: 50%;
+  width: min(420px, 76vw);
+  max-width: none;
+  text-align: center;
+  transform: translate(-50%, calc(-50% + 8px));
+}
+
+.thought-scene-3-center.active {
+  transform: translate(-50%, -50%);
+}
+
+.scene-3-enter-office-btn {
+  position: absolute;
+  right: 7%;
+  bottom: 12%;
+  z-index: 4;
+  padding: 14px 22px;
+  border: 1px solid rgba(228, 236, 247, 0.22);
+  background: rgba(16, 20, 29, 0.38);
+  color: rgba(242, 246, 255, 0.94);
+  font-size: 15px;
+  cursor: pointer;
+  border-radius: 999px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: transform 0.2s ease, opacity 0.4s ease, visibility 0.4s ease, background 0.2s ease;
+}
+
+.scene-3-enter-office-btn:hover {
+  transform: translateY(-1px);
+  background: rgba(24, 29, 40, 0.5);
+}
+
+.scene-3-enter-office-btn.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.scene-4-placeholder-box {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.scene-4-placeholder-box p {
+  margin: 0;
+  padding: 16px 20px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(238, 244, 255, 0.92);
+  backdrop-filter: blur(10px);
+}
 
 .scene-7-text-box {
   position: absolute;
@@ -318,6 +385,17 @@ canvas {
   .thought-water { left: 5%; top: 48%; }
   .thought-toaster { right: 5%; top: 14%; }
   .thought-drawer { left: 6%; bottom: 10%; }
+
+  .thought-scene-3-center {
+    width: min(82vw, 360px);
+  }
+
+  .scene-3-enter-office-btn {
+    right: 6%;
+    bottom: 10%;
+    font-size: 14px;
+    padding: 12px 18px;
+  }
 
   .scene-7-text-box {
     width: min(88vw, 460px);
