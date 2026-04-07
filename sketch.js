@@ -1660,7 +1660,7 @@ new p5(function (p) {
   }
 
   /*
-    Triggers Scene 2 -> Scene 7 door transition.
+    Triggers Scene 2 -> Scene 3 door transition.
 
     Important:
     doorTransitioning prevents multiple clicks from triggering it again.
@@ -1679,7 +1679,7 @@ new p5(function (p) {
     const appEl = document.getElementById("app");
     if (appEl) appEl.style.overflowY = "auto";
 
-    const nextScene = document.getElementById("scene-7");
+    const nextScene = document.getElementById("scene-3");
     if (nextScene) {
       setTimeout(() => {
         nextScene.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1890,6 +1890,177 @@ new p5(function (p) {
     }
   }
 }, "scene-2-container");
+
+/* =========================================================
+   SCENE 3 — COMMUTE AND DISSOCIATION
+========================================================= */
+
+new p5(function (p) {
+  let carX = [];
+  let carY = [];
+  let carWidth = [];
+  let carHeight = [];
+  let carSpeed = []; 
+  let allCarColors = ['#5E607E', '#828DA9', '#2F4B7C', '#714FA5', '#A0A4B8', '#465A80'];
+  let oneCarColor = []; //stores specifc car's color
+  let slowsDown = false;
+  let speedMultiplier = 1;
+  let pulse = 0;
+
+  let trafficLoud = new AudioChannel('sounds/scene3/traffic.mp3', true, 0.8);
+  let heartQuiet = new AudioChannel('sounds/scene3/muffledHeartbeat.mp3', true, 0.5);
+  let heartLoud = new AudioChannel('sounds/scene3/heartbeat.mp3', true, 0.9);
+  let trafficQuiet = new AudioChannel('sounds/scene3/muffledTraffic.mp3', true, 0.4);
+
+  p.setup = function() {
+    let container = document.getElementById("scene-3-container");
+    p.createCanvas(container.offsetWidth, container.offsetHeight);
+
+// "arm" them (loads the file into memory)
+    trafficLoud.arm();
+    heartQuiet.arm();
+    heartLoud.arm();
+    trafficQuiet.arm();
+
+    //stops the sounds from playing during scene 1 and 2!
+    trafficLoud.setTarget(0);
+    heartQuiet.setTarget(0);
+    trafficQuiet.setTarget(0);
+    heartLoud.setTarget(0);
+    
+    for(let i=0; i < 50; i++){
+      carX[i] = p.random(p.width);
+      carY[i] = p.random(p.height);
+      carWidth[i] = p.random(300, 500);
+      carHeight[i] = p.random(4, 12);
+      carSpeed[i] = p.random(2, 8);
+      oneCarColor[i] = p.random(allCarColors);
+    }
+  };
+
+  p.draw = function() {
+    p.background('#242A3A');
+
+    trafficLoud.update(p);
+    heartQuiet.update(p);
+    heartLoud.update(p);
+    trafficQuiet.update(p);
+
+    let scene = document.getElementById("scene-3");
+    let position = scene.getBoundingClientRect();
+    
+    //checks if the center of the viewport (windowHeight/2) is inside scene 3
+    let isCentered = (position.top < p.height / 2 && position.bottom > p.height / 2);
+
+    if (isCentered) {
+      if (!slowsDown) {
+        //normal state sounds
+        trafficLoud.setTarget(0.8);
+        heartQuiet.setTarget(0.5);
+        trafficQuiet.setTarget(0);
+        heartLoud.setTarget(0);
+      } else {
+        //dissociated state sounds (already handled in mousePressed, 
+        trafficLoud.setTarget(0);
+        heartQuiet.setTarget(0);
+        trafficQuiet.setTarget(0.4);
+        heartLoud.setTarget(0.9);
+      }
+    } else {
+      //if we aren't centered on Scene 3, KILL ALL SOUNDS
+      trafficLoud.setTarget(0);
+      heartQuiet.setTarget(0);
+      trafficQuiet.setTarget(0);
+      heartLoud.setTarget(0);
+    }
+
+    if (slowsDown == true) {
+      speedMultiplier = 0.1; 
+    } else {
+      speedMultiplier = 1.0; 
+    }
+
+    displayCars();
+    displayHeart();
+    
+  
+    if (slowsDown) {
+      unlockNextScene();
+    }
+  
+  };
+
+  function displayCars(){
+    p.noStroke();
+    for (let i = 0; i < 50; i++) {
+      p.fill(oneCarColor[i]); 
+      p.rect(carX[i], carY[i], carWidth[i], carHeight[i], 10);
+      carX[i] = carX[i] + (carSpeed[i] * speedMultiplier); //controls speed of cars
+
+      if (carX[i] > p.width) {
+        carX[i] = -carWidth[i];
+        carY[i] = p.random(p.height);
+      }
+    }
+  }
+
+  function displayHeart() {
+    p.push();
+    let pulseSpeed; 
+
+    if (slowsDown == true) {
+      pulseSpeed = 0.12; 
+      p.fill('#FF516E');
+      p.drawingContext.shadowColor = '#FF516E'; 
+    } 
+    else {
+      pulseSpeed = 0.04; 
+      p.fill('#FF8A9E');
+      p.drawingContext.shadowColor = '#FF8A9E'; 
+    }
+    
+    p.drawingContext.shadowBlur = 25; 
+    pulse = p.sin(p.frameCount * pulseSpeed) * 15;
+    p.ellipse(p.width/2, p.height/3, 100 + pulse);
+    p.pop();
+  }
+
+  p.mousePressed = function() {
+    let container = document.getElementById("scene-3");
+    let rect = container.getBoundingClientRect();
+    //checks if mouse is actually in scene 3
+    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+
+    slowsDown = !slowsDown; 
+    
+    if (slowsDown) {
+      trafficLoud.setTarget(0);  
+      heartQuiet.setTarget(0);
+      trafficQuiet.setTarget(0.4); 
+      heartLoud.setTarget(0.9);
+      
+      let thought = document.getElementById("scene-3-thought");
+      if(thought) thought.classList.add("active");
+    } else {
+      trafficLoud.setTarget(0.8);
+      heartQuiet.setTarget(0.5);
+      trafficQuiet.setTarget(0);
+      heartLoud.setTarget(0);
+    }
+  };
+
+  //goes to next scene, scene 4
+  function unlockNextScene() {
+    const appEl = document.getElementById("app");
+    if (appEl) appEl.style.overflowY = "auto";
+  }
+
+  p.windowResized = function() {
+    let container = document.getElementById("scene-3-container");
+    if (container) p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+  };
+}, "scene-3-container");
+
 
 /* =========================================================
    SCENE 7 — COMING BACK HOME
