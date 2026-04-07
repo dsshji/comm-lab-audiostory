@@ -1891,6 +1891,7 @@ new p5(function (p) {
   }
 }, "scene-2-container");
 
+
 /* =========================================================
    SCENE 3 — COMMUTE AND DISSOCIATION
 ========================================================= */
@@ -1906,6 +1907,7 @@ new p5(function (p) {
   let slowsDown = false;
   let speedMultiplier = 1;
   let pulse = 0;
+  let hasClickedS3 = false; //used to track when user interacts so another text box can appear
 
   let trafficLoud = new AudioChannel('sounds/scene3/traffic.mp3', true, 0.8);
   let heartQuiet = new AudioChannel('sounds/scene3/muffledHeartbeat.mp3', true, 0.5);
@@ -1982,11 +1984,6 @@ new p5(function (p) {
 
     displayCars();
     displayHeart();
-    
-  
-    if (slowsDown) {
-      unlockNextScene();
-    }
   
   };
 
@@ -2021,27 +2018,58 @@ new p5(function (p) {
     
     p.drawingContext.shadowBlur = 25; 
     pulse = p.sin(p.frameCount * pulseSpeed) * 15;
-    p.ellipse(p.width/2, p.height/3, 100 + pulse);
+    p.ellipse(p.width/2, p.height/2, 100 + pulse);
     p.pop();
   }
 
-  p.mousePressed = function() {
-    let container = document.getElementById("scene-3");
-    let rect = container.getBoundingClientRect();
-    //checks if mouse is actually in scene 3
-    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+p.mousePressed = function() {
+    // checks if the mouse is inside the scene 3 canvas
+    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) {
+      return; 
+    }
 
-    slowsDown = !slowsDown; 
+    // toggle the slowdown state
+    if (slowsDown === true) {
+      slowsDown = false;
+    } 
+    else {
+      slowsDown = true;
+    }
     
-    if (slowsDown) {
+    //if the world is slowing down, change sounds and swap text
+    if (slowsDown === true) {
+
+      // -- SOUND LOGIC --
       trafficLoud.setTarget(0);  
       heartQuiet.setTarget(0);
       trafficQuiet.setTarget(0.4); 
       heartLoud.setTarget(0.9);
       
-      let thought = document.getElementById("scene-3-thought");
-      if(thought) thought.classList.add("active");
+      // --TEXT SWAP LOGIC --
+      let t1 = document.getElementById("s3-text-1");
+      let t2 = document.getElementById("s3-text-2");
+
+      if (t1) {
+        t1.style.display = "none"; //hide the first box
+      }
+      if (t2) {
+        t2.style.display = "block"; //show the second box
+      }
+
+      // --- TIMER FOR BUTTON ---
+      setTimeout(function() {
+        let s3button = document.getElementById("s3-button");
+        if (s3button) {
+          s3button.style.display = "block"; //makes the button visible
+          
+          s3button.onclick = function() {
+            unlockNextScene();
+          };
+        }
+      }, 4500); // 4.5 seconds delay
+
     } else {
+      //clicking again "speeds" it back up
       trafficLoud.setTarget(0.8);
       heartQuiet.setTarget(0.5);
       trafficQuiet.setTarget(0);
@@ -2049,17 +2077,329 @@ new p5(function (p) {
     }
   };
 
-  //goes to next scene, scene 4
+  //unlocks the page and moves 
   function unlockNextScene() {
-    const appEl = document.getElementById("app");
-    if (appEl) appEl.style.overflowY = "auto";
+    let appEl = document.getElementById("app");
+    
+    if (appEl) {
+      appEl.style.overflowY = "auto"; //enable scrolling again
+    }
+
+    //find the next scene (currently Scene 6) NOTE: CHANGE TO SCENE 4 HERE WHEN UB ADD IT
+    let nextScene = document.getElementById("scene-6"); 
+    
+    if (nextScene) {
+      // Wait a tiny bit so the click feels physical, then scroll
+      setTimeout(function() {
+        nextScene.scrollIntoView({ 
+          behavior: "smooth", 
+          block: "start" 
+        });
+      }, 500); 
+    }
   }
 
   p.windowResized = function() {
     let container = document.getElementById("scene-3-container");
-    if (container) p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+    if (container) {
+      p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+    }
   };
 }, "scene-3-container");
+
+
+class AudioOnce { //for audios that do not loop (used in scene 6)
+  constructor(src, volume = 0.8) {
+    this.src = src;
+    this.maxVolume = volume;
+    this.audio = new Audio(src);
+    this.audio.loop = false; // FORCE loop to false
+    this.audio.volume = 0; 
+    this.audio.preload = "auto";
+  }
+
+  arm() {
+    this.audio.load();
+  }
+
+  update() {
+
+  }
+
+  play() {
+    this.audio.volume = this.maxVolume;
+    this.audio.currentTime = 0; //reset to start in case user clicks fast
+    this.audio.play().catch(e => console.log("Audio play blocked"));
+  }
+  
+  setTarget(v) {
+    // mutes if the user scrolls away
+    this.audio.volume = v;
+  }
+}
+
+/* =========================================================
+   SCENE 6 — THE TRAIN STATION
+========================================================= */
+
+new p5(function (p) {
+  let scene6State = 1; 
+  let ticketY = 0; //ticket moves down after click
+  let hasStamped = false; //checks if ticket is stamped
+  let stampTime = 0; 
+  let activeDot = 0; //tracks the stops on trainline (what dot (destination) is lit up)
+  let lastDotChange = 0; //stores time when train ride starts
+
+  //sounds/audios
+  let stationAmbience = new AudioChannel('sounds/scene6/stationAmbience.mp3', true, 0.5);
+  let trainRide = new AudioChannel('sounds/scene6/pan_trainstopping.mp3', true, 0.8); 
+  
+  //preloaded sounds for sounds that play once
+  let stampClick;
+  let rollingSuitcase;
+
+  p.setup = function() {
+    let container = document.getElementById("scene-6-container");
+    p.createCanvas(container.offsetWidth, container.offsetHeight);
+
+    //prevents looping for soudns played once (AudioOnce class)
+    stampClick = new AudioOnce('sounds/scene6/ticketvalidationstamp.mp3', 1.0);
+    rollingSuitcase = new AudioOnce('sounds/scene6/rollingSuitcase.mp3', 0.6);
+
+    //arm the audio channels
+    stationAmbience.arm();
+    trainRide.arm();
+    stampClick.arm();
+    rollingSuitcase.arm();
+
+    //ensure everything is quiet until we are centered on the scene so they dont overlap
+    stationAmbience.setTarget(0);
+    trainRide.setTarget(0);
+  };
+
+  p.draw = function() {
+    p.background('#a3a49f'); 
+
+    //update the audio channels every frame
+    stationAmbience.update(p);
+    trainRide.update(p);
+
+    let scene = document.getElementById("scene-6");
+    let position = scene.getBoundingClientRect();
+    
+    //checks if scene 6 is currently in view
+    let isCentered = (position.top < p.windowHeight / 2 && position.bottom > p.windowHeight / 2);
+
+    if (isCentered) {
+      if (scene6State === 1) {
+        stationAmbience.setTarget(0.5);
+        trainRide.setTarget(0);
+        stationBackground();
+        displayTicket();
+      } 
+      else if (scene6State === 2) {
+        stationAmbience.setTarget(0);
+        trainRide.setTarget(0.8);
+        trainInterior();
+        updateMapProgress();
+      }
+    } 
+    else {
+      // kill sounds if user scrolls away
+      stationAmbience.setTarget(0);
+      trainRide.setTarget(0);
+    }
+  };
+
+  function stationBackground() {
+    p.push();
+    p.rectMode(p.CORNER); 
+    
+    //wall of train station
+    p.fill('#BCBCBC');
+    p.noStroke();
+    p.rect(0, 0, p.width, p.height);
+    
+    //entrance of station (Sized down more)
+    p.fill(80); 
+    let entranceWidth = p.width * 0.6; 
+    let entranceX = (p.width - entranceWidth) / 2; 
+    p.rect(entranceX, p.height * 0.35, entranceWidth, p.height * 0.65);
+    
+    //sign at the top
+    p.fill('#444B53');
+    p.rect(0, 0, p.width * 1.2, 50); 
+    
+    //text in sign that says "train station"
+    p.fill(255);
+    p.textAlign(p.CENTER, p.CENTER);
+    p.textFont('Arial');
+    p.textSize(20); 
+    p.text("TRAIN STATION", p.width / 2, 25);
+    
+    p.pop();
+  } //end of stationBackground
+
+  function trainInterior() {
+    p.push();
+    p.fill('#E5E5E5');
+    p.noStroke();
+    p.rect(0, 0, p.width, p.height);
+
+    let doorHeight = 350; 
+    let doorWidth = 140;
+    let doorOffset = 75; 
+    
+    // train doors
+    if (activeDot === 3) {
+      p.drawingContext.shadowBlur = 60;
+      p.drawingContext.shadowColor = 'rgba(255, 255, 255, 0.8)';
+      p.fill('#b6b2b2'); //door lighter color when destination reached
+      p.stroke(255);
+      p.strokeWeight(2);
+    } else {
+      p.fill('#7d838a'); //door color
+      p.noStroke();
+    }
+    
+    p.rectMode(p.CENTER);
+    //main door panels
+    p.rect(p.width/2 - doorOffset, p.height/2 + 60, doorWidth, doorHeight, 5); 
+    p.rect(p.width/2 + doorOffset, p.height/2 + 60, doorWidth, doorHeight, 5);
+    
+    p.drawingContext.shadowBlur = 0;
+    p.fill('#A8DADC'); 
+    p.noStroke();
+    //windows centered on the door panels
+    p.rect(p.width/2 - doorOffset, p.height/2 + 30, 90, 140, 15); 
+    p.rect(p.width/2 + doorOffset, p.height/2 + 30, 90, 140, 15);
+
+    //TRAIN LINE MAP 
+    let mapY = p.height * 0.15;
+    p.fill(255);
+    p.rect(p.width/2, mapY, 280, 30, 5); 
+    
+    p.stroke('#BDBDBD');
+    p.strokeWeight(2);
+    let startX = p.width/2 - 100;
+    let endX = p.width/2 + 100;
+    p.line(startX, mapY, endX, mapY);
+
+    p.noStroke(); 
+    for (let i = 0; i < 4; i++) {
+      let x = p.map(i, 0, 3, startX, endX);
+      if (i === activeDot) {
+        p.fill('#FF516E'); 
+        p.ellipse(x, mapY, 12);
+      } else {
+        p.fill('#BDBDBD');
+        p.ellipse(x, mapY, 8);
+      }
+    }
+    p.pop();
+  } //end of trainInterior
+
+  function displayTicket() {
+    p.push();
+    p.translate(p.width / 2, p.height / 2 + ticketY);
+    
+    p.fill('#A8DADC'); 
+    p.stroke(255, 100);
+    p.strokeWeight(2);
+    p.rectMode(p.CENTER);
+    p.rect(0, 0, 300, 180, 10); 
+
+    p.fill(40);
+    p.noStroke();
+    p.textAlign(p.LEFT);
+    p.textFont('Courier New');
+    p.textSize(16); 
+    p.text("RAIL PASS", -130, -50);
+    p.textSize(9);
+    p.text("ADULT STANDARD CLASS", -130, -38);
+    p.textSize(10);
+    p.text("YEAR-MONTH-DAY", -130, 25);
+    p.textSize(18);
+    p.text("2026 . 04 . 08", -130, 48);
+
+    p.noFill();
+    p.stroke(40);
+    p.strokeWeight(1);
+    p.drawingContext.setLineDash([6, 4]); 
+    p.ellipse(90, 40, 60); 
+    p.drawingContext.setLineDash([]); 
+
+    if (hasStamped === true) {
+      p.fill('rgba(255, 60, 60, 0.7)');
+      p.noStroke();
+      p.ellipse(90, 40, 55);
+      p.fill(150, 0, 0);
+      p.textAlign(p.CENTER);
+      p.textSize(10);
+      p.text("VALIDATED", 90, 44);
+      
+      let currentTime = p.millis();
+      if (currentTime - stampTime > 1500) {
+        ticketY += 20; 
+      }
+      
+      if (ticketY > p.height) {
+        scene6State = 2;
+        lastDotChange = p.millis(); 
+      }
+    }
+    p.pop();
+  }
+
+  function updateMapProgress() {
+    let elapsed = (p.millis() - lastDotChange) / 1000; 
+    if (elapsed < 11) activeDot = 0;
+    else if (elapsed < 16) activeDot = 1;
+    else if (elapsed < 22) activeDot = 2;
+    else activeDot = 3;
+  }
+
+  p.mousePressed = function() {
+    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+
+    if (scene6State === 1 && hasStamped === false) {
+      let stampX = p.width / 2 + 90; 
+      let stampY = p.height / 2 + 40; 
+      
+      if (p.dist(p.mouseX, p.mouseY, stampX, stampY) < 30) {
+        hasStamped = true;
+        stampTime = p.millis();
+
+        if (stampClick) stampClick.play();
+        if (rollingSuitcase) rollingSuitcase.play();
+      }
+    }
+    
+    if (scene6State === 2 && activeDot === 3) {
+      if (p.dist(p.mouseX, p.mouseY, p.width/2, p.height/2 + 60) < 100) {
+         unlockNextScene(); 
+      }
+    }
+  }; 
+
+  function unlockNextScene() {
+    const appEl = document.getElementById("app");
+    if (appEl) appEl.style.overflowY = "auto";
+    if (window.resetScene7Intro) window.resetScene7Intro();
+
+    const nextScene = document.getElementById("scene-7");
+    if (nextScene) {
+      setTimeout(() => {
+        nextScene.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 300); 
+    }
+  }
+
+  p.windowResized = function() {
+    let container = document.getElementById("scene-6-container");
+    if (container) p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+  };
+}, "scene-6-container");
 
 
 /* =========================================================
