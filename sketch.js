@@ -3814,26 +3814,39 @@ new p5(function (p) {
 ========================================================= */
 
 let scene6ScrollLocked = false;
+let scene7ScrollLocked = false;
+
+function updateAppScrollLock() {
+  const appEl = document.getElementById("app");
+  if (!appEl) return;
+
+  const shouldLock = scene3ScrollLocked || scene45ScrollLocked || scene6ScrollLocked || scene7ScrollLocked;
+  appEl.style.overflowY = shouldLock ? "hidden" : "auto";
+}
 
 function setScene6ScrollLock(locked) {
   scene6ScrollLocked = locked;
-  const appEl = document.getElementById("app");
-  if (appEl) appEl.style.overflowY = locked ? "hidden" : "auto";
+  updateAppScrollLock();
+}
+
+function setScene7ScrollLock(locked) {
+  scene7ScrollLocked = locked;
+  updateAppScrollLock();
 }
 
 window.addEventListener("wheel", function (event) {
-  if (!scene6ScrollLocked) return;
+  if (!scene6ScrollLocked && !scene7ScrollLocked) return;
   event.preventDefault();
 }, { passive: false });
 
 window.addEventListener("touchmove", function (event) {
-  if (!scene6ScrollLocked) return;
+  if (!scene6ScrollLocked && !scene7ScrollLocked) return;
   event.preventDefault();
 }, { passive: false });
 
 window.addEventListener("keydown", function (event) {
-  if (!scene6ScrollLocked) return;
-  if (!["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) return;
+  if (!scene6ScrollLocked && !scene7ScrollLocked) return;
+  if (!["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Spacebar"].includes(event.key)) return;
   event.preventDefault();
 });
 
@@ -3899,8 +3912,12 @@ p.draw = function () {
   const sceneRect = sceneEl7 ? sceneEl7.getBoundingClientRect() : null;
   const scene7Visible = !!sceneRect && sceneRect.top < window.innerHeight && sceneRect.bottom > 0;
 
-  ambientScene7.setTarget(scene7Visible ? 0.32 : 0);
-  ambientScene7.update(p);
+  if (scene7Visible) {
+    setScene7ScrollLock(true);
+  }
+
+   ambientScene7.setTarget(scene7Visible ? 0.32 : 0);
+   ambientScene7.update(p);
 
   updateScene7Texts(elapsed);
 
@@ -3998,17 +4015,43 @@ p.draw = function () {
   /*
     Resets Scene 7 intro text timing.
   */
-  function resetScene7() {
-    state7.startedAt = p.millis();
-    state7.textShown = [false, false, false];
+function resetScene7() {
+  state7.startedAt = p.millis();
+  state7.textShown = [false, false, false];
 
-    ambientScene7.immediateStop();
-    ambientScene7.setTarget(0);
+  for (const key in textEls7) {
+    const el = textEls7[key];
+    if (!el) continue;
 
-    for (const key in textEls7) {
-      if (textEls7[key]) textEls7[key].classList.remove("active");
-    }
+    // Hide instantly so boxes do not flash during the Scene 6 -> Scene 7 scroll.
+    el.style.transition = "none";
+    el.classList.remove("active");
+    el.style.opacity = "0";
+    el.style.visibility = "hidden";
+    el.style.transform = "translateX(-50%) translateY(14px)";
   }
+
+  // Force the browser to apply the no-transition hidden state now.
+  document.body.offsetHeight;
+
+  // Restore normal CSS transitions for the next timed reveal.
+  requestAnimationFrame(() => {
+    for (const key in textEls7) {
+      const el = textEls7[key];
+      if (!el) continue;
+
+      el.style.transition = "";
+      el.style.opacity = "";
+      el.style.visibility = "";
+      el.style.transform = "";
+    }
+  });
+
+  ambientScene7.immediateStop();
+  ambientScene7.setTarget(0);
+  
+  setScene7ScrollLock(true);
+}
 
   window.resetScene7Intro = resetScene7;
 
@@ -4051,6 +4094,7 @@ function restartStoryJourney() {
 
   ambientScene7.immediateStop();
 
+  setScene7ScrollLock(false);
   setScene6ScrollLock(false);
   setScene45ScrollLock(false);
   setScene3ScrollLock(false);
