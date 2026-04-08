@@ -3679,41 +3679,40 @@ new p5(function (p) {
   }
 
 p.mousePressed = function() {
-    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+  // Checks if the mouse is actually inside this scene's canvas
+  if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
 
-    if (scene6State === 1 && hasStamped === false) {
-      let stampX = p.width / 2 + 140; 
-      let stampY = p.height / 2 + 60; 
-      let d = p.dist(p.mouseX, p.mouseY, stampX, stampY);
-      
-      if (d < 45) {
-        hasStamped = true;
-        stampTime = p.millis(); //records the time the stamp was clicked so it waits for a bit before moving
-        if (stampClick) stampClick.play();
-        if (rollingSuitcase) rollingSuitcase.play();
-      }
-    }
+  // STATE 1: Ticket Stamping Logic
+  if (scene6State === 1 && hasStamped === false) {
+    let stampX = p.width / 2 + 140; 
+    let stampY = p.height / 2 + 60; 
+    let d = p.dist(p.mouseX, p.mouseY, stampX, stampY);
     
-    if (scene6State === 2 && activeDot === 3) {
-      // CLICK FIX
-      let isInsideDoors = (
-        p.mouseX > p.width/2 - 160 && 
-        p.mouseX < p.width/2 + 160 && 
-        p.mouseY > p.height/2 - 200 && 
-        p.mouseY < p.height/2 + 300
-      );
-
-      if (isInsideDoors) {
-         unlockNextScene(); 
-      }
+    if (d < 45) {
+      hasStamped = true;
+      stampTime = p.millis(); //records the time the stamp was clicked so it waits for a bit
+      if (stampClick) stampClick.play();
+      if (rollingSuitcase) rollingSuitcase.play();
     }
-  }; //end of mousePressed
+  }
+  
+  //
+  // Once the train reaches the last dot (activeDot 3), click to move to scene 7
+  if (scene6State === 2 && activeDot === 3) {
+      unlockNextScene(); 
+  }
+}; //end of mousePressed
 
 function unlockNextScene() {
-  //restart the scene 7 timer
-  if (window.resetScene7Intro) window.resetScene7Intro();
+  //
+  document.body.style.overflowY = "auto";
 
-  //scroll the whole browser window to scene 7
+  // scene 7 timer to reset 
+  if (window.resetScene7Intro) {
+    window.resetScene7Intro();
+  }
+
+  //find scene 7 and scroll to it using the window's offset
   const nextScene = document.getElementById("scene-7");
   if (nextScene) {
     window.scrollTo({
