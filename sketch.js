@@ -2223,9 +2223,9 @@ appEl.style.overflowY = "auto"; //enable scrolling again
 
 
 
-//find the next scene (currently Scene 6) NOTE: CHANGE TO SCENE 4 HERE WHEN UB ADD IT
+//find the next scene
 
-let nextScene = document.getElementById("scene-6");
+let nextScene = document.getElementById("scene-4");
 
 
 if (nextScene) {
@@ -2322,6 +2322,1137 @@ this.audio.volume = v;
 
 }
 
+
+/* =========================================================
+   SCENE 4 & 5
+========================================================= */
+
+// Global scroll lock for scenes 4 & 5
+let scene45ScrollLocked = false;
+
+function setScene45ScrollLock(locked) {
+  scene45ScrollLocked = locked;
+  const appEl = document.getElementById("app");
+  if (appEl) appEl.style.overflowY = locked ? "hidden" : "auto";
+}
+
+window.addEventListener("wheel", function (event) {
+  if (!scene45ScrollLocked) return;
+  event.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchmove", function (event) {
+  if (!scene45ScrollLocked) return;
+  event.preventDefault();
+}, { passive: false });
+
+window.addEventListener("keydown", function (event) {
+  if (!scene45ScrollLocked) return;
+  if (!["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) return;
+  event.preventDefault();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Easing functions
+// ═══════════════════════════════════════════════════════════════════════════════
+function easeOut(x) { return 1 - Math.pow(1 - x, 2.8); }
+function easeOut2(x) { return 1 - Math.pow(1 - x, 1.5); }
+function smoothstep(e0, e1, x) {
+  let t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// START p5 INSTANCE FOR SCENES 4 & 5
+// ═══════════════════════════════════════════════════════════════════════════════
+
+new p5(function (p) {
+  // Scene timing constants
+  const SCENE4_DURATION = 40;
+  const SCENE5_DURATION = 40;
+  
+  // Scene 4: Office anxiety state
+  let rects = [];
+  let extraRects = [];
+  let boxLines = [];
+  let particles = [];
+  let clickCount = 0;
+  let mouseSpeed = 0;
+  let lastMousePos = { x: 0, y: 0 };
+  let anxiety = 1;
+  let currentPhase = 'ORDER';
+  let freezeFrames = 0;
+  let countrysideMoment = false;
+  let countrysideAlpha = 0;
+  let whooshPlayed = false;
+  let pauseStarted = false;
+
+  const PHASES = {
+    ORDER:      [0.00, 0.18],
+    REPETITION: [0.18, 0.38],
+    TREMBLING:  [0.38, 0.55],
+    DENSITY:    [0.55, 0.72],
+    GLITCH:     [0.72, 0.88],
+    PAUSE:      [0.88, 1.00],
+  };
+
+  // Color palette
+  const C = {
+    bg:          [245, 244, 242],
+    g1:          [210, 208, 205],
+    g2:          [165, 162, 157],
+    g3:          [112, 108, 104],
+    g4:          [ 60,  57,  54],
+    b1:          [185, 200, 212],
+    b2:          [130, 152, 168],
+    white:       [255, 255, 255],
+    red:         [215,  45,  40],
+    green:       [100, 185, 120],
+    redDark:     [150,  22,  14],
+    redLight:    [240,  90,  60],
+    dark:        [ 20,  18,  16],
+    charcoal:    [ 28,  25,  22],
+    softYellow:  [255, 245, 170],
+    honeyGlow:   [255, 220, 100],
+    warmWhite:   [255, 252, 225],
+  };
+
+  // ─── AUDIO ──────────────────────────────────────────────────────────────────
+  // Scene 4 looping bg — AudioChannel for lerp-based fade
+  let bgScene4 = new AudioChannel('sounds/scene4/demoscene4.mp3', true, 0.55);
+
+  // Scene 5 bg — plain Audio for simplicity (start/stop directly)
+  let bgAudio5 = new Audio('sounds/scene5/background_bedroomambience.mp3');
+  bgAudio5.loop = true;
+  bgAudio5.volume = 0.5;
+  bgAudio5.preload = 'auto';
+
+  // One-shot click sounds (scene 4)
+  let s4Clicks = [];
+  let s4ClickPaths = [
+    'sounds/scene4/clockticking.mp3',
+    'sounds/scene4/mouseclicks.mp3',
+    'sounds/scene4/paperruffle.mp3',
+    'sounds/scene4/justtyping.mp3',
+    'sounds/scene4/typingwithexhale.mp3',
+    'sounds/scene4/officetelephone.mp3'
+  ];
+  for (let i = 0; i < s4ClickPaths.length; i++) {
+    let a = new Audio(s4ClickPaths[i]);
+    a.preload = 'auto';
+    s4Clicks.push(a);
+  }
+
+  // One-shot pack sounds
+  let s5Pack = [];
+  let s5PackPaths = [
+    'sounds/scene5/drawer_openclose.mp3',
+    'sounds/scene5/pan_clothes.mp3',
+    'sounds/scene5/safebeepopen.mp3',
+    'sounds/scene5/pan_drawer_openclose.mp3'
+  ];
+  for (let i = 0; i < s5PackPaths.length; i++) {
+    let a = new Audio(s5PackPaths[i]);
+    a.preload = 'auto';
+    s5Pack.push(a);
+  }
+
+  // Camera shutter whoosh at pause phase
+  let s4Whoosh = new Audio('sounds/scene4/camerashutter.mp3');
+  s4Whoosh.preload = 'auto';
+
+  function playOneShot(audioEl, vol) {
+    audioEl.volume = vol !== undefined ? vol : 0.6;
+    audioEl.currentTime = 0;
+    audioEl.play().catch(function() {});
+  }
+
+  // Scene 5: Packing state
+  let scrollX = 0;
+  let frameT = 0;
+  const SCROLL_SPEED = 1.8;
+  const SEGMENTS = 180;
+  const LINE_COUNT = 55;
+
+  let lines = [];
+  let greenObjects = [];
+  let badItems = [];
+  let bursts = [];
+  let packedCount = 0;
+  const TOTAL_PACK = 4;
+  let allLinesFinalGreenTriggered = false;
+  let scene5Started = false;
+
+  let badItemPopup = null;
+
+  let sceneStartTime = null;
+  let currentScene = 4;
+
+  // ─── SCENE 4: BUILD GRID ──────────────────────────────────────────────────
+  function buildGrid() {
+    let result = [];
+    let cols = 10, rows = 7;
+    let cW = p.width / cols, cH = p.height / rows;
+    
+    for (let c = 0; c < cols; c++) {
+      for (let r = 0; r < rows; r++) {
+        let col = p.random() < 0.6
+          ? [C.g1, C.g2, C.g3][Math.floor(p.random(3))]
+          : [C.b1, C.b2][Math.floor(p.random(2))];
+        
+        result.push({
+          cx: c * cW + cW / 2,
+          cy: r * cH + cH / 2,
+          w: cW * 1.12,
+          h: cH * 1.12,
+          col: col,
+          noiseX: p.random(1000),
+          noiseY: p.random(1000),
+          driftX: 0,
+          driftY: 0,
+          visible: true,
+        });
+      }
+    }
+    return result;
+  }
+
+  function spawnExtraBlock() {
+    let col = p.random() < 0.65
+      ? [C.g1, C.g2, C.g3][Math.floor(p.random(3))]
+      : [C.b1, C.b2][Math.floor(p.random(2))];
+    
+    let cW = p.random(40, 140), cH = p.random(30, 100);
+    extraRects.push({
+      cx: p.random(p.width * 0.05, p.width * 0.95),
+      cy: p.random(p.height * 0.05, p.height * 0.95),
+      w: cW,
+      h: cH,
+      col: col,
+      noiseX: p.random(1000),
+      noiseY: p.random(1000),
+      driftX: 0,
+      driftY: 0,
+    });
+  }
+
+  // ─── SCENE 4: PHASES ───────────────────────────────────────────────────────
+  function getCurrentPhase(scenePct) {
+    if (scenePct < 0.18) return 'ORDER';
+    if (scenePct < 0.38) return 'REPETITION';
+    if (scenePct < 0.55) return 'TREMBLING';
+    if (scenePct < 0.72) return 'DENSITY';
+    if (scenePct < 0.88) return 'GLITCH';
+    return 'PAUSE';
+  }
+
+  function phaseProgress(scenePct, phaseName) {
+    let s = PHASES[phaseName][0], e = PHASES[phaseName][1];
+    return p.constrain((scenePct - s) / (e - s), 0, 1);
+  }
+
+  function triggerEnding() {
+    freezeFrames = 45;
+    setTimeout(function() {
+      countrysideMoment = true;
+    }, 800);
+  }
+
+  function drawCountrysideMoment() {
+    if (!countrysideMoment) return;
+    countrysideAlpha = Math.min(countrysideAlpha + 3, 180);
+    p.background(255);
+    p.noStroke();
+    p.rectMode(p.CORNER);
+    
+    let progress = countrysideAlpha / 180;
+    let barThickness = p.lerp(0, p.height * 0.7, progress);
+    
+    p.fill(C.green[0], C.green[1], C.green[2], p.lerp(0, 255, progress));
+    p.rect(0, 0, p.width, barThickness);
+    p.rect(0, p.height - barThickness, p.width, barThickness);
+    p.rect(0, 0, barThickness, p.height);
+    p.rect(p.width - barThickness, 0, barThickness, p.height);
+    
+    if (progress > 0.95) {
+      p.fill(0, 0, 0, p.map(progress, 0.95, 1, 0, 255));
+      p.rect(0, 0, p.width, p.height);
+    }
+    p.rectMode(p.CENTER);
+  }
+
+  // ─── SCENE 4: DRAW BLOCKS ──────────────────────────────────────────────────
+  function drawBlock(block, dimFactor, driftAmount, jitterAmount, alphaBoost, useGhosts, noiseTime) {
+    if (block.visible === false) return;
+
+    let targetX = (p.noise(block.noiseX, noiseTime) - 0.5) * 2 * driftAmount;
+    let targetY = (p.noise(block.noiseY, noiseTime + 100) - 0.5) * 2 * driftAmount;
+
+    block.driftX = p.lerp(block.driftX || 0, targetX, 0.04);
+    block.driftY = p.lerp(block.driftY || 0, targetY, 0.04);
+
+    let jitterX = jitterAmount > 0 ? p.random(-jitterAmount, jitterAmount) * 0.55 : 0;
+    let jitterY = jitterAmount > 0 ? p.random(-jitterAmount, jitterAmount) * 0.55 : 0;
+
+    let x = block.cx + block.driftX + jitterX;
+    let y = block.cy + block.driftY + jitterY;
+    let alpha = dimFactor * alphaBoost;
+
+    if (useGhosts) {
+      let gx = block.cx + block.driftX * 2.1 + jitterX;
+      let gy = block.cy + block.driftY * 2.1 + jitterY;
+      p.fill(...block.col, 34 * alpha * 0.22);
+      p.rect(gx, gy, block.w * 1.14, block.h * 1.14);
+      p.fill(...block.col, 63 * alpha * 0.22);
+      p.rect(gx, gy, block.w * 0.99, block.h * 0.99);
+    }
+
+    let padX = block.w * 0.10;
+    let padY = block.h * 0.10;
+
+    p.fill(...block.col, 34 * alpha);
+    p.rect(x, y, block.w, block.h);
+    p.fill(...block.col, 63 * alpha);
+    p.rect(x, y, block.w - padX * 1.5, block.h - padY * 1.5);
+    p.fill(...block.col, 100 * alpha);
+    p.rect(x, y, block.w - padX * 3, block.h - padY * 3);
+  }
+
+  function drawBlocks(scenePct, phase, anxiety = 1) {
+    let driftAmount = 0;
+    let noiseSpeed = 0.001;
+    let jitterAmount = 0;
+    let alphaBoost = 1;
+    let useGhosts = false;
+
+    let spawnChance = 0;
+    if (phase === 'REPETITION') spawnChance = 0.04;
+    else if (phase === 'TREMBLING') spawnChance = 0.08;
+    else if (phase === 'DENSITY') spawnChance = 0.14;
+    else if (phase === 'GLITCH') spawnChance = 0.10;
+    if (p.random() < spawnChance) spawnExtraBlock();
+
+    if (phase === 'ORDER') {
+      driftAmount = 3;
+    } else if (phase === 'REPETITION') {
+      let pr = phaseProgress(scenePct, 'REPETITION');
+      driftAmount = p.lerp(3, 7, pr);
+      alphaBoost = p.lerp(1, 1.10, pr);
+    } else if (phase === 'TREMBLING') {
+      let pr = phaseProgress(scenePct, 'TREMBLING');
+      driftAmount = p.lerp(7, 16, pr);
+      noiseSpeed = 0.0014;
+      jitterAmount = p.lerp(0, 6, pr);
+      alphaBoost = p.lerp(1.10, 1.28, pr);
+    } else if (phase === 'DENSITY') {
+      let pr = phaseProgress(scenePct, 'DENSITY');
+      driftAmount = p.lerp(16, 30, pr);
+      noiseSpeed = 0.0020;
+      jitterAmount = p.lerp(6, 14, pr);
+      alphaBoost = p.lerp(1.28, 1.60, pr);
+      useGhosts = true;
+    } else if (phase === 'GLITCH') {
+      let pr = phaseProgress(scenePct, 'GLITCH');
+      driftAmount = p.lerp(30, 46, pr);
+      noiseSpeed = 0.0028;
+      jitterAmount = p.lerp(14, 26, pr);
+      alphaBoost = 1.85;
+      useGhosts = true;
+    }
+
+    driftAmount *= anxiety;
+    jitterAmount *= anxiety;
+    alphaBoost *= (1 + (anxiety - 1) * 0.5);
+
+    let noiseTime = p.frameCount * noiseSpeed;
+
+    p.noStroke();
+    p.rectMode(p.CENTER);
+
+    for (let block of rects) {
+      drawBlock(block, 1, driftAmount, jitterAmount, alphaBoost, useGhosts, noiseTime);
+    }
+    for (let block of extraRects) {
+      drawBlock(block, 0.82, driftAmount, jitterAmount, alphaBoost, useGhosts, noiseTime);
+    }
+  }
+
+  function manageBoxLines(phase) {
+    let chance = 0;
+    if (phase === 'REPETITION') chance = 0.022;
+    else if (phase === 'TREMBLING') chance = 0.045;
+    else if (phase === 'DENSITY') chance = 0.080;
+    else if (phase === 'GLITCH') chance = 0.120;
+    if (p.random() > chance) return;
+
+    let cx = p.random(p.width * 0.1, p.width * 0.9);
+    let cy = p.random(p.height * 0.1, p.height * 0.9);
+    let bw = p.random(60, 240);
+    let bh = p.random(40, 160);
+    let colChoice = p.random();
+    let col = colChoice < 0.65 ? C.white : colChoice < 0.88 ? C.red : C.green;
+    let layers = phase === 'DENSITY' || phase === 'GLITCH' ? 3 : 2;
+    let speed = phase === 'REPETITION' ? p.random(0.004, 0.007)
+              : phase === 'TREMBLING' ? p.random(0.006, 0.010)
+              : phase === 'DENSITY' ? p.random(0.008, 0.013)
+              : p.random(0.010, 0.016);
+
+    for (let k = 0; k < layers; k++) {
+      let gap = k * p.random(8, 18);
+      boxLines.push({
+        cx, cy,
+        w: bw + gap * 2,
+        h: bh + gap * 2,
+        col,
+        alpha: p.random(100, 190) * (1 - k * 0.28),
+        lineW: k === 0 ? p.random(1, 2) : 1,
+        progress: 0,
+        speed,
+      });
+    }
+  }
+
+  function drawBoxLines() {
+    p.noFill();
+    p.strokeJoin(p.MITER);
+    p.strokeCap(p.SQUARE);
+
+    for (let b of boxLines) {
+      b.progress = Math.min(b.progress + b.speed, 1.12);
+      if (b.progress <= 0) continue;
+      p.stroke(b.col[0], b.col[1], b.col[2], b.alpha * (1 - Math.max(0, b.progress - 1) / 0.12));
+      p.strokeWeight(b.lineW);
+
+      let hw = b.w / 2, hh = b.h / 2;
+      let perim = 2 * (b.w + b.h);
+      let drawn = perim * p.constrain(b.progress, 0, 1);
+      let corners = [
+        { x: b.cx - hw, y: b.cy - hh },
+        { x: b.cx + hw, y: b.cy - hh },
+        { x: b.cx + hw, y: b.cy + hh },
+        { x: b.cx - hw, y: b.cy + hh },
+      ];
+      let sideLens = [b.w, b.h, b.w, b.h];
+
+      p.beginShape();
+      p.vertex(corners[0].x, corners[0].y);
+      let acc = 0;
+      for (let i = 0; i < 4; i++) {
+        let sLen = sideLens[i];
+        let next = corners[(i + 1) % 4];
+        if (acc + sLen <= drawn) {
+          p.vertex(next.x, next.y);
+          acc += sLen;
+        } else {
+          let frac = (drawn - acc) / sLen;
+          p.vertex(
+            p.lerp(corners[i].x, next.x, frac),
+            p.lerp(corners[i].y, next.y, frac)
+          );
+          break;
+        }
+      }
+      p.endShape();
+    }
+    boxLines = boxLines.filter(b => b.progress < 1.12);
+  }
+
+  function manageParticles(phase, anxiety = 1) {
+    let rate = phase === 'GLITCH' ? 12 : 5;
+    rate = Math.floor(rate * anxiety);
+    
+    for (let i = 0; i < rate; i++) {
+      let col = p.random() < 0.68
+        ? [C.g2, C.g3, C.g4][Math.floor(p.random(3))]
+        : [C.b1, C.b2][Math.floor(p.random(2))];
+      
+      particles.push({
+        x: p.random(p.width),
+        y: p.random(p.height),
+        vx: p.random(-1.2, 1.2),
+        vy: p.random(-0.3, -2.0),
+        size: p.random(1.2, 4.5),
+        col: col,
+        alpha: p.random(28, 95),
+        life: 1,
+      });
+    }
+    
+    for (let p_particle of particles) {
+      p_particle.x += p_particle.vx;
+      p_particle.y += p_particle.vy;
+      p_particle.life -= 0.010;
+    }
+    
+    particles = particles.filter(p_particle => p_particle.life > 0);
+  }
+
+  function drawParticles() {
+    p.noStroke();
+    p.rectMode(p.CORNER);
+    for (let p_particle of particles) {
+      p.fill(...p_particle.col, p_particle.alpha * p_particle.life);
+      p.rect(p_particle.x, p_particle.y, p_particle.size, p_particle.size);
+    }
+    p.rectMode(p.CENTER);
+  }
+
+  function drawGlitch(t) {
+    let gP = phaseProgress(t, 'GLITCH');
+    p.noStroke();
+    p.rectMode(p.CORNER);
+    
+    for (let i = 0; i < Math.floor(p.lerp(1, 10, gP)); i++) {
+      let y = p.random(p.height), h = p.random(1, 7), offset = p.random(-65, 65);
+      p.fill(...[C.g1, C.g2, C.white][Math.floor(p.random(3))], p.random(20, 110) * gP);
+      p.rect(0, y, p.width, h);
+    }
+    
+    if (gP > 0.45 && p.random() < p.map(gP, 0.45, 1, 0, 0.12)) {
+      p.stroke(...C.red, 38 * gP);
+      p.strokeWeight(p.random(1, 2));
+      let x = p.random(p.width);
+      p.line(x, 0, x + p.random(-14, 14), p.height);
+    }
+    p.rectMode(p.CENTER);
+  }
+
+  function drawVignette(t, phase) {
+    let strength;
+    if (phase === 'ORDER' || phase === 'REPETITION') return;
+    if (phase === 'TREMBLING') strength = p.lerp(0, 55, phaseProgress(t, 'TREMBLING'));
+    if (phase === 'DENSITY')   strength = p.lerp(55, 130, phaseProgress(t, 'DENSITY'));
+    if (phase === 'GLITCH')    strength = p.lerp(130, 175, phaseProgress(t, 'GLITCH'));
+    if (!strength) return;
+
+    p.noStroke();
+    p.rectMode(p.CORNER);
+    for (let i = 0; i < 8; i++) {
+      let m = i * 16, a = p.map(i, 0, 7, strength, 0);
+      p.fill(28, 26, 24, a);
+      p.rect(0, 0, p.width, m);
+      p.rect(0, p.height - m, p.width, m);
+      p.rect(0, 0, m, p.height);
+      p.rect(p.width - m, 0, m, p.height);
+    }
+    p.rectMode(p.CENTER);
+  }
+
+  /* function drawBreathingPressure(t, phase) {
+    let pr = phase === 'DENSITY' ? phaseProgress(t, 'DENSITY') : 1;
+    let breathSpeed = p.lerp(0.018, 0.045, pr);
+    let breath = Math.sin(p.frameCount * breathSpeed) * 0.5 + 0.5;
+    let baseR = p.lerp(p.width * 0.55, p.width * 0.75, pr);
+    let r = baseR + breath * p.lerp(20, 60, pr);
+    let a = p.lerp(8, 22, pr) * (0.6 + 0.4 * breath);
+
+    p.noStroke();
+    p.fill(28, 26, 24, a);
+    p.ellipse(p.width / 2, p.height / 2, r * 2, r * 2);
+  } */
+
+  function drawPause(t) {
+    let pr = phaseProgress(t, 'PAUSE');
+
+    if (pr < 0.02 && !whooshPlayed) {
+      whooshPlayed = true;
+      playOneShot(s4Whoosh, 0.8);
+    }
+
+    if (pr < 0.18) {
+      let fP = p.map(pr, 0.00, 0.18, 0, 1);
+      let eased = fP < 0.5 ? 2 * fP * fP : 1 - Math.pow(-2 * fP + 2, 2) / 2;
+
+      p.background(...C.bg);
+      p.noStroke();
+      let bloomR = p.lerp(0, p.width * 1.1, eased);
+      p.fill(255, 255, 255, (1 - eased) * 140);
+      p.ellipse(p.width / 2, p.height / 2, bloomR * 2.6);
+      p.fill(255, 255, 255, eased * 255);
+      p.ellipse(p.width / 2, p.height / 2, bloomR * 2);
+      p.rectMode(p.CORNER);
+      p.fill(255, 255, 255, Math.pow(eased, 1.6) * 245);
+      p.rect(0, 0, p.width, p.height);
+      p.rectMode(p.CENTER);
+    }
+  }
+
+  // Draw contextual text label at the bottom of scene 4
+  function drawScene4Text(phase) {
+    let txt = '';
+    if (phase === 'ORDER' || phase === 'REPETITION') {
+      txt = "Back in office. Everything should be perfect.";
+    } else if (phase === 'TREMBLING' || phase === 'DENSITY' || phase === 'GLITCH') {
+      txt = "But it's so hard to keep it up...";
+    }
+    if (!txt) return;
+
+    p.push();
+    p.noStroke();
+    p.rectMode(p.CENTER);
+    p.textSize(13);
+    p.textAlign(p.CENTER, p.CENTER);
+    let boxW = p.textWidth(txt) + 28;
+    p.fill(248, 246, 242, 170);
+    p.rect(p.width / 2, p.height - 40, boxW, 28, 999);
+    p.fill(30, 28, 24, 215);
+    p.text(txt, p.width / 2, p.height - 39);
+    p.pop();
+  }
+
+  function scene4_mousePressed() {
+    clickCount++;
+    for (let i = 0; i < p.random(3, 8); i++) spawnExtraBlock();
+    // louder clicks during glitch phase
+    let clickVol = currentPhase === 'GLITCH' ? 0.75 : 0.5;
+    playOneShot(s4Clicks[Math.floor(p.random(s4Clicks.length))], clickVol);
+  }
+
+  function scene4_mouseDragged() {
+    // drag only spawns extra blocks; particles removed for performance
+  }
+
+  // ─── SCENE 5 HELPERS ───────────────────────────────────────────────────────
+  function range(a, b) {
+    let r = [];
+    for (let i = a; i <= b; i++) r.push(i);
+    return r;
+  }
+
+  function lerpCol(a, b, t) {
+    return [p.lerp(a[0], b[0], t), p.lerp(a[1], b[1], t), p.lerp(a[2], b[2], t)];
+  }
+
+  // ─── SCENE 5: BUILD LINES ──────────────────────────────────────────────────
+  function buildLines() {
+    lines = [];
+    for (let i = 0; i < LINE_COUNT; i++) {
+      lines.push({
+        id: i,
+        yBase: p.map(i, 0, LINE_COUNT - 1, p.height * 0.04, p.height * 0.96),
+        nSeed: p.random(2000),
+        wobble: p.random(16, 40),
+        wobbleTarget: p.random(16, 40),
+        weight: p.random(1.2, 3.4),
+        weightTarget: p.random(1.2, 3.4),
+        greenness: 0,
+        greennessTarget: 0,
+        alpha: p.random(160, 240),
+      });
+    }
+  }
+
+  function getBandY(lineIds) {
+    let sum = 0;
+    for (let i = 0; i < lineIds.length; i++) {
+      let id = lineIds[i];
+      sum += lines[id] ? lines[id].yBase : p.height / 2;
+    }
+    return sum / lineIds.length;
+  }
+
+  function scheduleGreenObjects() {
+    greenObjects = [
+      { shape: 'circle',  spawnTime: 3,  r: 30, linesOwned: range(0, 10),  packed: false, scale: 0, glowPhase: 0,                x: 0, y: 0, spawnScrollX: null },
+      { shape: 'diamond', spawnTime: 12, r: 34, linesOwned: range(41, 54), packed: false, scale: 0, glowPhase: p.random(p.TWO_PI), x: 0, y: 0, spawnScrollX: null },
+      { shape: 'square',  spawnTime: 21, r: 32, linesOwned: range(18, 32), packed: false, scale: 0, glowPhase: p.random(p.TWO_PI), x: 0, y: 0, spawnScrollX: null },
+      { shape: 'circle',  spawnTime: 30, r: 28, linesOwned: range(11, 17), packed: false, scale: 0, glowPhase: p.random(p.TWO_PI), x: 0, y: 0, spawnScrollX: null },
+    ];
+    for (let i = 0; i < greenObjects.length; i++) {
+      greenObjects[i].y = getBandY(greenObjects[i].linesOwned);
+    }
+  }
+
+  function scheduleBadItems() {
+    badItems = [
+      { shape: 'square', spawnTime: 5,  y: p.height * 0.32, x: 0, alpha: 0, soundPlayed: false, popup: "I don't need this with me." },
+      { shape: 'square', spawnTime: 15, y: p.height * 0.60, x: 0, alpha: 0, soundPlayed: false, popup: "I'll leave it behind." },
+      { shape: 'square', spawnTime: 24, y: p.height * 0.45, x: 0, alpha: 0, soundPlayed: false, popup: "This stays here." },
+      { shape: 'square', spawnTime: 34, y: p.height * 0.78, x: 0, alpha: 0, soundPlayed: false, popup: "I can let this go." },
+    ];
+  }
+
+  function updateLines() {
+    for (let i = 0; i < lines.length; i++) {
+      lines[i].greenness = p.lerp(lines[i].greenness, lines[i].greennessTarget, 0.025);
+      lines[i].wobble    = p.lerp(lines[i].wobble, lines[i].wobbleTarget, 0.018);
+      lines[i].weight    = p.lerp(lines[i].weight, lines[i].weightTarget, 0.018);
+    }
+  }
+
+  function drawLines() {
+    let segW = (p.width + 240) / SEGMENTS;
+    p.noFill();
+
+    for (let i = 0; i < lines.length; i++) {
+      let l = lines[i];
+      let g = easeOut2(l.greenness);
+      let col = lerpCol(C.red, C.green, g);
+
+      if (g < 0.5) {
+        p.stroke(C.redDark[0], C.redDark[1], C.redDark[2], l.alpha * 0.40 * (1 - g));
+        p.strokeWeight(l.weight * 2.0);
+        p.strokeCap(p.ROUND);
+        drawOneLine(l, segW, 1.18, 0.0012);
+        p.stroke(C.redLight[0], C.redLight[1], C.redLight[2], l.alpha * 0.70 * (1 - g));
+        p.strokeWeight(l.weight * 0.7);
+        drawOneLine(l, segW, 0.5, 0.0);
+      }
+
+      p.stroke(col[0], col[1], col[2], l.alpha);
+      p.strokeWeight(p.lerp(l.weight, 0.7, g));
+      drawOneLine(l, segW, 1.0, 0.0);
+    }
+    p.noStroke();
+  }
+
+  function drawOneLine(l, segW, wobbleScale, timeOffset) {
+    let timeComponent = p.frameCount * 0.008 + timeOffset * p.frameCount;
+    p.beginShape();
+    for (let s = 0; s <= SEGMENTS; s++) {
+      let x = -120 + s * segW;
+      let nx = (x + scrollX) * 0.0035 + l.nSeed;
+      let ny = timeComponent + l.nSeed * 0.3;
+      let wobbleY = (p.noise(nx, ny) - 0.5) * 2 * l.wobble * wobbleScale;
+      p.vertex(x, l.yBase + wobbleY);
+    }
+    p.endShape();
+  }
+
+
+  function drawRedObject(obj, alpha) {
+    p.push();
+    p.rectMode(p.CENTER);
+    p.noStroke();
+    
+    let size = 50;
+    let col = lerpCol([255, 180, 150], [230, 110, 85], frameT);
+    
+    p.fill(col[0], col[1], col[2], alpha * 0.34);
+    p.rect(0, 0, size * 1.2, size * 1.2, 4);
+    p.fill(col[0], col[1], col[2], alpha * 0.65);
+    p.rect(0, 0, size * 0.85, size * 0.85, 3);
+    p.fill(col[0], col[1], col[2], alpha);
+    p.rect(0, 0, size * 0.5, size * 0.5, 2);
+    
+    p.pop();
+  }
+
+  function updateAndDrawBadItems() {
+    for (let i = 0; i < badItems.length; i++) {
+      let item = badItems[i];
+      let screenX = (item.spawnTime * 45 - scrollX) + p.width * 0.8;
+      if (screenX > p.width + 80 || screenX < -140) continue;
+
+      item.x = screenX;
+      item.alpha = p.constrain(
+        p.map(screenX, p.width * 0.85, p.width * 0.6, 0, 160),
+        0,
+        p.constrain(p.map(screenX, 80, -100, 160, 0), 0, 160)
+      );
+
+      if (item.alpha <= 1) continue;
+
+      p.push();
+      p.translate(item.x, item.y);
+      drawRedObject(item, item.alpha);
+      p.pop();
+    }
+  }
+
+  function drawShapeAt(shapeType, r, size) {
+    if (shapeType === 'circle') {
+      p.ellipse(0, 0, size * 2, size * 2);
+    } else if (shapeType === 'diamond') {
+      p.beginShape();
+      p.vertex(0, -size * 1.15);
+      p.vertex(size * 0.8, 0);
+      p.vertex(0, size * 1.15);
+      p.vertex(-size * 0.8, 0);
+      p.endShape(p.CLOSE);
+    } else if (shapeType === 'square') {
+      p.rectMode(p.CENTER);
+      p.rect(0, 0, size * 1.8, size * 1.8, size * 0.18);
+    }
+  }
+
+  function drawGreenObject(obj) {
+    let s = easeOut(obj.scale);
+    if (s < 0.02) return;
+
+    let glow = Math.sin(obj.glowPhase) * 0.5 + 0.5;
+
+    p.push();
+    p.translate(obj.x, obj.y);
+    p.scale(s);
+
+    if (!obj.packed) {
+      p.noStroke();
+      let glowR = obj.r * p.lerp(2.4, 3.8, glow);
+      p.fill(C.softYellow[0], C.softYellow[1], C.softYellow[2], 55);
+      drawShapeAt(obj.shape, obj.r, glowR);
+      p.fill(C.softYellow[0], C.softYellow[1], C.softYellow[2], 120);
+      drawShapeAt(obj.shape, obj.r, glowR * 0.65);
+      p.fill(C.warmWhite[0], C.warmWhite[1], C.warmWhite[2], 240);
+      drawShapeAt(obj.shape, obj.r, obj.r * 1.02);
+      p.stroke(C.softYellow[0], C.softYellow[1], C.softYellow[2], 200);
+      p.strokeWeight(2.2);
+      p.noFill();
+      drawShapeAt(obj.shape, obj.r, obj.r * 1.06);
+    } else {
+      p.noStroke();
+      p.fill(240, 230, 150, 100);
+      drawShapeAt(obj.shape, obj.r, obj.r * 1.05);
+      p.stroke(C.softYellow[0], C.softYellow[1], C.softYellow[2], 210);
+      p.strokeWeight(3.0);
+      p.noFill();
+      let cs = obj.r * 0.52;
+      p.line(-cs, 0, -cs * 0.18, cs * 0.85);
+      p.line(-cs * 0.18, cs * 0.85, cs * 1.2, -cs * 0.7);
+    }
+    
+    p.pop();
+  }
+
+  function updateAndDrawGreenObjects() {
+    let currentTime = frameT * SCENE5_DURATION;
+    
+    for (let i = 0; i < greenObjects.length; i++) {
+      let obj = greenObjects[i];
+      if (currentTime < obj.spawnTime) continue;
+      
+      // record scrollX at first activation so later objects appear at the right edge
+      if (obj.spawnScrollX === null) obj.spawnScrollX = scrollX;
+      let screenX = p.width * 0.8 + (currentTime - obj.spawnTime) * 45 - (scrollX - obj.spawnScrollX);
+      
+      if (screenX > p.width + obj.r * 3) continue;
+      
+      obj.x = screenX;
+      obj.glowPhase += 0.045;
+      
+      if (!obj.packed) {
+        obj.scale = Math.min(obj.scale + 0.045, 1);
+      } else if (screenX < -obj.r * 5) {
+        continue;
+      }
+      
+      drawGreenObject(obj);
+    }
+  }
+
+  function packObject(objIndex) {
+    let obj = greenObjects[objIndex];
+    obj.packed = true;
+    packedCount++;
+
+    // turn the lines this object owns green
+    for (let k = 0; k < obj.linesOwned.length; k++) {
+      let id = obj.linesOwned[k];
+      if (id >= lines.length) continue;
+      lines[id].greennessTarget = 1;
+      lines[id].wobbleTarget = 0;
+      lines[id].weightTarget = 0.7;
+    }
+
+    // spawn a burst of particles
+    for (let i = 0; i < 50; i++) {
+      let angle = p.random(p.TWO_PI);
+      let spd = p.random(3.5, 12);
+      bursts.push({
+        x: obj.x, y: obj.y,
+        vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd,
+        life: 1, decay: p.random(0.010, 0.020),
+        r: p.random(3, 8.5),
+        col: p.random() < 0.6 ? C.softYellow : C.honeyGlow,
+      });
+    }
+
+    // play the matching pack sound
+    if (objIndex < s5Pack.length) playOneShot(s5Pack[objIndex], 0.7);
+  }
+
+  function updateAndDrawBursts() {
+    p.noStroke();
+    let alive = [];
+    for (let i = 0; i < bursts.length; i++) {
+      let b = bursts[i];
+      b.x += b.vx;
+      b.y += b.vy;
+      b.vx *= 0.90;
+      b.vy *= 0.90;
+      b.life -= b.decay;
+      if (b.life <= 0) continue;
+      p.fill(b.col[0], b.col[1], b.col[2], b.life * 230);
+      p.ellipse(b.x, b.y, b.r * 2.2 * b.life);
+      alive.push(b);
+    }
+    bursts = alive;
+  }
+
+  function drawPackingPrompt() {
+    let prompts = [
+      "Should I take these books?",
+      "I probably need to pack clothes as well.",
+      "Wait, I can't forget my documents...",
+      "Do I need this thing with me?.."
+    ];
+    let prompt = prompts[packedCount] || "everything packed?";
+
+    p.push();
+    p.noStroke();
+    p.rectMode(p.CENTER);
+    p.textSize(13);
+    p.textAlign(p.CENTER, p.CENTER);
+    let boxW = p.textWidth(prompt) + 28;
+    p.fill(248, 246, 242, 170);
+    p.rect(p.width / 2, p.height - 40, boxW, 28, 999);
+    p.fill(30, 28, 24, 215);
+    p.text(prompt, p.width / 2, p.height - 39);
+    p.pop();
+  }
+
+  function drawBadItemPopup() {
+    if (!badItemPopup) return;
+    badItemPopup.timer--;
+    if (badItemPopup.timer <= 0) {
+      badItemPopup.alpha = p.lerp(badItemPopup.alpha, 0, 0.12);
+      if (badItemPopup.alpha < 2) { badItemPopup = null; return; }
+    }
+    p.push();
+    p.rectMode(p.CENTER);
+    p.noStroke();
+    p.textSize(13);
+    p.textAlign(p.CENTER, p.CENTER);
+    let boxW = p.textWidth(badItemPopup.text) + 28;
+    p.fill(248, 246, 242, badItemPopup.alpha * 0.85);
+    p.rect(badItemPopup.x, badItemPopup.y, boxW, 28, 999);
+    p.fill(30, 28, 24, badItemPopup.alpha);
+    p.text(badItemPopup.text, badItemPopup.x, badItemPopup.y + 1);
+    p.pop();
+  }
+
+  function scene5_mousePressed() {
+    // check red bad items first
+    for (let i = 0; i < badItems.length; i++) {
+      let item = badItems[i];
+      if (item.alpha <= 1) continue;
+      if (p.dist(p.mouseX, p.mouseY, item.x, item.y) < 35) {
+        badItemPopup = { text: item.popup, x: item.x, y: item.y - 50, alpha: 255, timer: 45 };
+        return;
+      }
+    }
+
+    // check green pack objects
+    let currentTime = frameT * SCENE5_DURATION;
+    for (let i = 0; i < greenObjects.length; i++) {
+      let obj = greenObjects[i];
+      if (obj.packed || currentTime < obj.spawnTime) continue;
+      if (p.dist(p.mouseX, p.mouseY, obj.x, obj.y) < obj.r * 1.6 * easeOut(obj.scale)) {
+        packObject(i);
+        return;
+      }
+    }
+  }
+
+  // ─── p5 SETUP & DRAW ────────────────────────────────────────────────────────
+  p.setup = function() {
+    let containerEl = document.getElementById("scene-4-container");
+    let w = containerEl ? containerEl.offsetWidth : p.windowWidth;
+    let h = containerEl ? containerEl.offsetHeight : p.windowHeight;
+    p.createCanvas(w, h);
+    p.colorMode(p.RGB, 255);
+    p.frameRate(60);
+    p.pixelDensity(1);
+
+    rects = buildGrid();
+    extraRects = [];
+    buildLines();
+    scheduleGreenObjects();
+    scheduleBadItems();
+
+    setScene45ScrollLock(true);
+  };
+
+  p.draw = function() {
+    // Don't start counting until scene-4-container is actually centred on screen
+    if (sceneStartTime === null) {
+      let containerEl = document.getElementById("scene-4-container");
+      if (!containerEl) return;
+      let rect = containerEl.getBoundingClientRect();
+      let centred = rect.top < p.windowHeight / 2 && rect.bottom > p.windowHeight / 2;
+      if (!centred) return;
+      sceneStartTime = p.millis() / 1000;
+    }
+
+    let elapsed = p.millis() / 1000 - sceneStartTime;
+
+    // Set audio targets BEFORE update so changes take effect this frame
+    if (elapsed < SCENE4_DURATION) {
+      let tempPct = p.constrain(elapsed / SCENE4_DURATION, 0, 1);
+      let tempPhase = getCurrentPhase(tempPct);
+      if (tempPhase !== 'PAUSE' && !countrysideMoment) {
+        // louder during GLITCH phase
+        bgScene4.setTarget(tempPhase === 'GLITCH' ? 0.75 : 0.55);
+      } else {
+        bgScene4.setTarget(0);
+      }
+    } else {
+      bgScene4.setTarget(0);
+    }
+    bgScene4.update(p);
+
+    // SCENE 4
+    if (elapsed < SCENE4_DURATION) {
+      currentScene = 4;
+      let scenePct = p.constrain(elapsed / SCENE4_DURATION, 0, 1);
+      currentPhase = getCurrentPhase(scenePct);
+
+      if (freezeFrames > 0) {
+        freezeFrames--;
+        return;
+      }
+
+      if (countrysideMoment) {
+        bgScene4.setTarget(0);
+        drawCountrysideMoment();
+        return;
+      }
+
+      mouseSpeed = p.dist(p.mouseX, p.mouseY, lastMousePos.x, lastMousePos.y);
+      lastMousePos = { x: p.mouseX, y: p.mouseY };
+
+      let speedAnxiety = p.map(Math.min(mouseSpeed, 50), 0, 50, 1, 1.8);
+      let clickAnxiety = p.map(Math.min(clickCount, 20), 0, 20, 1, 1.5);
+      anxiety = speedAnxiety * clickAnxiety;
+      anxiety = p.constrain(anxiety, 0.8, 2.0);
+
+      if (currentPhase === 'PAUSE' && freezeFrames === 0 && !countrysideMoment) {
+        // immediately cut all scene 4 sounds
+        if (!pauseStarted) {
+          pauseStarted = true;
+          bgScene4.immediateStop();
+          for (let i = 0; i < s4Clicks.length; i++) {
+            s4Clicks[i].pause();
+            s4Clicks[i].currentTime = 0;
+          }
+        }
+        triggerEnding();
+        drawPause(scenePct);
+        return;
+      }
+
+      if (currentPhase !== 'PAUSE') {
+        bgScene4.setTarget(currentPhase === 'GLITCH' ? 0.75 : 0.55);
+        p.background(...C.bg);
+        drawBlocks(scenePct, currentPhase, anxiety);
+        drawBoxLines();
+        if (currentPhase !== 'ORDER') manageBoxLines(currentPhase);
+        if (currentPhase === 'DENSITY' || currentPhase === 'GLITCH') {
+          manageParticles(currentPhase, anxiety);
+          drawParticles();
+        }
+        if (currentPhase === 'GLITCH') drawGlitch(scenePct);
+        drawVignette(scenePct, currentPhase);
+        /* if (currentPhase === 'DENSITY' || currentPhase === 'GLITCH') {
+          drawBreathingPressure(scenePct, currentPhase);
+        } */
+        drawScene4Text(currentPhase);
+      }
+    }
+    // SCENE 5
+    else {
+      currentScene = 5;
+      bgScene4.setTarget(0);
+
+      // on first scene 5 frame: stop scene 4 sounds, start scene 5 bg
+      if (!scene5Started) {
+        scene5Started = true;
+        for (let i = 0; i < s4Clicks.length; i++) {
+          s4Clicks[i].pause();
+          s4Clicks[i].currentTime = 0;
+        }
+        s4Whoosh.pause();
+        s4Whoosh.currentTime = 0;
+        bgAudio5.play().catch(function() {});
+      }
+
+      let sceneElapsed = elapsed - SCENE4_DURATION;
+      frameT = p.constrain(sceneElapsed / SCENE5_DURATION, 0, 1);
+      scrollX += p.lerp(SCROLL_SPEED, SCROLL_SPEED * 0.55, smoothstep(0.88, 1.0, frameT));
+
+      let bg = lerpCol(C.charcoal, [255, 255, 225], easeOut2(frameT));
+      p.background(...bg);
+
+      updateLines();
+      drawLines();
+      updateAndDrawBadItems();
+      drawBadItemPopup();
+      updateAndDrawGreenObjects();
+      updateAndDrawBursts();
+      drawPackingPrompt();
+
+      if ((frameT >= 0.98 || packedCount === TOTAL_PACK) && !allLinesFinalGreenTriggered) {
+        allLinesFinalGreenTriggered = true;
+        for (let i = 0; i < lines.length; i++) {
+          lines[i].greennessTarget = 1;
+          lines[i].wobbleTarget = 0;
+          lines[i].weightTarget = 0.7;
+        }
+      }
+
+      if (packedCount === TOTAL_PACK && frameT > 0.5) {
+        let pulse = Math.sin(p.frameCount * 0.05) * 0.08 + 0.92;
+        let rtg = "READY TO GO";
+        p.push();
+        p.noStroke();
+        p.rectMode(p.CENTER);
+        p.textSize(24);
+        p.textAlign(p.CENTER, p.CENTER);
+        let rtgW = p.textWidth(rtg) + 36;
+        p.fill(248, 246, 242, 170 * pulse);
+        p.rect(p.width / 2, p.height / 2, rtgW, 42, 999);
+        p.fill(30, 28, 24, 215 * pulse);
+        p.text(rtg, p.width / 2, p.height / 2 + 1);
+        p.pop();
+      }
+      
+      // Unlock scroll and move to scene 6
+      if (frameT >= 1.0) {
+        bgAudio5.pause();
+        bgAudio5.currentTime = 0;
+        setScene45ScrollLock(false);
+        setTimeout(function() {
+          let scene6 = document.getElementById("scene-6");
+          if (scene6) scene6.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 500);
+      }
+    }
+  };
+
+  p.mousePressed = function() {
+    if (sceneStartTime === null) return;
+    if (currentScene === 4) {
+      scene4_mousePressed();
+    } else if (currentScene === 5) {
+      scene5_mousePressed();
+    }
+  };
+
+  p.mouseDragged = function() {
+    if (sceneStartTime === null) return;
+    if (currentScene === 4) {
+      scene4_mouseDragged();
+    }
+  };
+
+  p.windowResized = function() {
+    let containerEl = document.getElementById("scene-4-container");
+    if (!containerEl) return;
+    p.resizeCanvas(containerEl.offsetWidth, containerEl.offsetHeight);
+    rects = buildGrid();
+  };
+
+}, "scene-4-container");
 
 
 
