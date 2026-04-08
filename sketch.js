@@ -20,7 +20,7 @@
 const AUDIO_PATHS = {
   ambient: "sounds/scene1/background.mp3",
   sun: "",
-  farm: "",
+  farm: "sounds/scene1/cows.mp3",
   kids: "",
   transitionAlarm: "sounds/scene1/digitalalarm_long.mp3"
 };
@@ -2485,8 +2485,11 @@ new p5(function (p) {
 
   let badItemPopup = null;
 
-  let sceneStartTime = null;
-  let currentScene = 4;
+let sceneStartTime = null;
+let currentScene = 4;
+let scene45SentToScene6 = false;
+let scene45Finished = false;
+  
 
   // ─── SCENE 4: BUILD GRID ──────────────────────────────────────────────────
   function buildGrid() {
@@ -2881,9 +2884,9 @@ new p5(function (p) {
   function drawScene4Text(phase) {
     let txt = '';
     if (phase === 'ORDER' || phase === 'REPETITION') {
-      txt = "Back in office. Everything should be perfect.";
+      txt = "Back in office. Everything should be perfect. But there is so much work...";
     } else if (phase === 'TREMBLING' || phase === 'DENSITY' || phase === 'GLITCH') {
-      txt = "But it's so hard to keep it up...";
+      txt = "I CANNOT DO THIS ANYMORE";
     }
     if (!txt) return;
 
@@ -3273,16 +3276,18 @@ new p5(function (p) {
     setScene45ScrollLock(true);
   };
 
-  p.draw = function() {
-    // Don't start counting until scene-4-container is actually centred on screen
-    if (sceneStartTime === null) {
-      let containerEl = document.getElementById("scene-4-container");
-      if (!containerEl) return;
-      let rect = containerEl.getBoundingClientRect();
-      let centred = rect.top < p.windowHeight / 2 && rect.bottom > p.windowHeight / 2;
-      if (!centred) return;
-      sceneStartTime = p.millis() / 1000;
-    }
+ p.draw = function() {
+  if (scene45Finished) return;
+
+  // Don't start counting until scene-4-container is actually centred on screen
+  if (sceneStartTime === null) {
+    let containerEl = document.getElementById("scene-4-container");
+    if (!containerEl) return;
+    let rect = containerEl.getBoundingClientRect();
+    let centred = rect.top < p.windowHeight / 2 && rect.bottom > p.windowHeight / 2;
+    if (!centred) return;
+    sceneStartTime = p.millis() / 1000;
+  }
 
     let elapsed = p.millis() / 1000 - sceneStartTime;
 
@@ -3402,7 +3407,7 @@ new p5(function (p) {
 
       if (packedCount === TOTAL_PACK && frameT > 0.5) {
         let pulse = Math.sin(p.frameCount * 0.05) * 0.08 + 0.92;
-        let rtg = "READY TO GO";
+        let rtg = "THAT'S IT. I CANNOT STAY IN THIS PLACE ANYMORE. I AM LEAVING RIGHT NOW";
         p.push();
         p.noStroke();
         p.rectMode(p.CENTER);
@@ -3416,16 +3421,24 @@ new p5(function (p) {
         p.pop();
       }
       
-      // Unlock scroll and move to scene 6
-      if (frameT >= 1.0) {
-        bgAudio5.pause();
-        bgAudio5.currentTime = 0;
-        setScene45ScrollLock(false);
-        setTimeout(function() {
-          let scene6 = document.getElementById("scene-6");
-          if (scene6) scene6.scrollIntoView({ behavior: "smooth", block: "start" });
-        }, 500);
-      }
+// Move to Scene 6 only once.
+if (frameT >= 1.0 && !scene45SentToScene6) {
+  scene45SentToScene6 = true;
+  scene45Finished = true;
+
+  bgAudio5.pause();
+  bgAudio5.currentTime = 0;
+
+  setScene45ScrollLock(false);
+  setScene6ScrollLock(true);
+
+  setTimeout(function() {
+    let scene6 = document.getElementById("scene-6");
+    if (scene6) {
+      scene6.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, 500);
+}
     }
   };
 
@@ -3460,18 +3473,22 @@ new p5(function (p) {
 ========================================================= */
 
 new p5(function (p) {
-  let scene6State = 1; 
-  let ticketY = 0; //ticket moves down after click
-  let hasStamped = false; //checks if ticket is stamped
-  let stampTime = 0; 
-  let activeDot = 0; //tracks the stops on trainline (what dot (destination) is lit up)
-  let lastDotChange = 0; //stores time when train ride starts
+  let scene6State = 1;
+  let ticketY = 0;
+  let hasStamped = false;
+  let stampTime = 0;
 
-  //sounds/audios
+  let activeDot = 0;
+  let lastDotChange = 0;
+
+  let scene6Leaving = false;
+  let scene6ButtonHovered = false;
+  let scene6ButtonVisible = false;
+  let scene6ButtonLocked = false;
+
   let stationAmbience = new AudioChannel('sounds/scene6/stationAmbience.mp3', true, 0.5);
-  let trainRide = new AudioChannel('sounds/scene6/pan_trainstopping.mp3', true, 0.8); 
-  
-  //preloaded sounds for sounds that play once
+  let trainRide = new AudioChannel('sounds/scene6/pan_trainstopping.mp3', true, 0.8);
+
   let stampClick;
   let rollingSuitcase;
 
@@ -3479,83 +3496,84 @@ new p5(function (p) {
     let container = document.getElementById("scene-6-container");
     p.createCanvas(container.offsetWidth, container.offsetHeight);
 
-    //prevents looping for soudns played once (AudioOnce class)
     stampClick = new AudioOnce('sounds/scene6/ticketvalidationstamp.mp3', 1.0);
     rollingSuitcase = new AudioOnce('sounds/scene6/rollingSuitcase.mp3', 0.6);
 
-    //arm the audio channels
     stationAmbience.arm();
     trainRide.arm();
     stampClick.arm();
     rollingSuitcase.arm();
 
-    //ensure everything is quiet until we are centered on the scene so they dont overlap
     stationAmbience.setTarget(0);
     trainRide.setTarget(0);
   };
 
   p.draw = function() {
-    p.background('#a3a49f'); 
+    p.background('#a3a49f');
 
-    //update the audio channels every frame
     stationAmbience.update(p);
     trainRide.update(p);
 
     let scene = document.getElementById("scene-6");
+    if (!scene) return;
+
     let position = scene.getBoundingClientRect();
-    
-    //checks if scene 6 is currently in view
     let isCentered = (position.top < p.windowHeight / 2 && position.bottom > p.windowHeight / 2);
 
     if (isCentered) {
+      if (!scene6Leaving) {
+        setScene6ScrollLock(true);
+      }
+
       if (scene6State === 1) {
-        stationAmbience.setTarget(0.5);
+        stationAmbience.setTarget(scene6Leaving ? 0 : 0.5);
         trainRide.setTarget(0);
         stationBackground();
         displayTicket();
-      } 
-      else if (scene6State === 2) {
+      } else if (scene6State === 2) {
         stationAmbience.setTarget(0);
-        trainRide.setTarget(0.8);
+        trainRide.setTarget(scene6Leaving ? 0 : 0.8);
         trainInterior();
         updateMapProgress();
+        updateScene6ButtonState();
+        drawScene6NextButton();
       }
-    } 
-    else {
-      // kill sounds if user scrolls away
+    } else {
+      if (!scene6Leaving) {
+        setScene6ScrollLock(false);
+      }
+
       stationAmbience.setTarget(0);
       trainRide.setTarget(0);
     }
+
+    p.cursor(scene6ButtonHovered ? p.HAND : p.ARROW);
   };
 
   function stationBackground() {
     p.push();
-    p.rectMode(p.CORNER); 
-    
-    //wall of train station
+    p.rectMode(p.CORNER);
+
     p.fill('#BCBCBC');
     p.noStroke();
     p.rect(0, 0, p.width, p.height);
-    
-    //entrance of station
-    p.fill(80); 
-    let entranceWidth = p.width * 0.8; 
-    let entranceX = (p.width - entranceWidth) / 2; // Centers the entrance
+
+    p.fill(80);
+    let entranceWidth = p.width * 0.8;
+    let entranceX = (p.width - entranceWidth) / 2;
     p.rect(entranceX, p.height * 0.25, entranceWidth, p.height * 0.8);
-    
-    //sign at the top
+
     p.fill('#444B53');
-    p.rect(0, 0, p.width, 80); 
-    
-    //text in sign that says "train station"
+    p.rect(0, 0, p.width, 80);
+
     p.fill(255);
     p.textAlign(p.CENTER, p.CENTER);
     p.textFont('Arial');
-    p.textSize(32); 
+    p.textSize(32);
     p.text("TRAIN STATION", p.width / 2, 40);
-    
+
     p.pop();
-  } //end of stationBackground
+  }
 
   function trainInterior() {
     p.push();
@@ -3563,77 +3581,66 @@ new p5(function (p) {
     p.noStroke();
     p.rect(0, 0, p.width, p.height);
 
-    let doorHeight = 500; 
-    
-    //glow effect for doors when train reaches the last stop
-    if (activeDot === 3) {
-      p.drawingContext.shadowBlur = 60;
-      p.drawingContext.shadowColor = 'rgba(255, 255, 255, 0.8)';
-      p.fill('#CACACA'); 
-      p.stroke(255);
-      p.strokeWeight(2);
-    } else {
-      p.fill('#B7B7B7'); 
-      p.noStroke();
-    }
-    
-    p.rectMode(p.CENTER);
-    p.rect(p.width/2 - 77, p.height/2 + 50, 150, doorHeight, 5); 
-    p.rect(p.width/2 + 77, p.height/2 + 50, 150, doorHeight, 5);
-    
-    p.drawingContext.shadowBlur = 0;
-    p.fill('#A8DADC'); 
-    p.noStroke();
-    p.rect(p.width/2 - 77, p.height/2, 100, 200, 20); 
-    p.rect(p.width/2 + 77, p.height/2, 100, 200, 20);
+    let doorHeight = 500;
 
-    //TRAIN LINE MAP STARTS HERE
+    p.fill('#B7B7B7');
+    p.noStroke();
+
+    p.rectMode(p.CENTER);
+    p.rect(p.width / 2 - 77, p.height / 2 + 50, 150, doorHeight, 5);
+    p.rect(p.width / 2 + 77, p.height / 2 + 50, 150, doorHeight, 5);
+
+    p.fill('#A8DADC');
+    p.noStroke();
+    p.rect(p.width / 2 - 77, p.height / 2, 100, 200, 20);
+    p.rect(p.width / 2 + 77, p.height / 2, 100, 200, 20);
+
     p.fill(255);
-    p.rect(p.width/2, p.height/2 - 250, 400, 40, 5); 
-    
-    //connecting line (drawn behind the dots)
+    p.rect(p.width / 2, p.height / 2 - 250, 400, 40, 5);
+
     p.stroke('#BDBDBD');
     p.strokeWeight(2);
-    let startX = p.width/2 - 150;
-    let endX = p.width/2 + 150;
-    let lineY = p.height/2 - 250;
+    let startX = p.width / 2 - 150;
+    let endX = p.width / 2 + 150;
+    let lineY = p.height / 2 - 250;
     p.line(startX, lineY, endX, lineY);
 
-    p.noStroke(); //resets stroke so it doesnt mess up the dots
-    
+    p.noStroke();
+
     for (let i = 0; i < 4; i++) {
       let x = p.map(i, 0, 3, startX, endX);
       if (i === activeDot) {
-        p.fill('#FF516E'); 
+        p.fill('#FF516E');
         p.ellipse(x, lineY, 15);
       } else {
         p.fill('#BDBDBD');
         p.ellipse(x, lineY, 10);
       }
     }
+
     p.pop();
-  } //end of trainInterior
+  }
 
   function displayTicket() {
     p.push();
     p.translate(p.width / 2, p.height / 2 + ticketY);
-    
-    p.fill('#A8DADC'); 
+
+    p.fill('#A8DADC');
     p.stroke(255, 100);
     p.strokeWeight(2);
     p.rectMode(p.CENTER);
-    p.rect(0, 0, 450, 280, 15); 
+    p.rect(0, 0, 450, 280, 15);
 
     p.fill(40);
     p.noStroke();
     p.textAlign(p.LEFT);
     p.textFont('Courier New');
-    
+
     p.textSize(22);
     p.text("RAIL PASS", -200, -80);
     p.textSize(12);
     p.text("ADULT STANDARD CLASS", -200, -60);
-    
+
     p.textSize(14);
     p.text("YEAR-MONTH-DAY", -200, 40);
     p.textSize(24);
@@ -3642,96 +3649,193 @@ new p5(function (p) {
     p.noFill();
     p.stroke(40);
     p.strokeWeight(1);
-    p.drawingContext.setLineDash([6, 4]); 
-    p.ellipse(140, 60, 90); 
-    p.drawingContext.setLineDash([]); 
+    p.drawingContext.setLineDash([6, 4]);
+    p.ellipse(140, 60, 90);
+    p.drawingContext.setLineDash([]);
 
-    if (hasStamped === true) {
+    if (hasStamped) {
       p.fill('rgba(255, 60, 60, 0.7)');
       p.noStroke();
       p.ellipse(140, 60, 85);
-      
+
       p.fill(150, 0, 0);
       p.textAlign(p.CENTER);
       p.textSize(14);
       p.text("VALIDATED", 140, 65);
-      
-      //waits 2 secs then moves
+
       let currentTime = p.millis();
       if (currentTime - stampTime > 1500) {
-        ticketY += 25; //starts moving down after 1500ms (1.5 seconds)
+        ticketY += 25;
       }
-      
+
       if (ticketY > p.height) {
         scene6State = 2;
-        lastDotChange = p.millis(); //starts timer for train line dots
+        lastDotChange = p.millis();
       }
     }
+
     p.pop();
   }
 
   function updateMapProgress() {
-    let elapsed = (p.millis() - lastDotChange) / 1000; //calculates the seconds that have passed since entering the train
+    if (scene6Leaving) return;
+
+    let elapsed = (p.millis() - lastDotChange) / 1000;
+
     if (elapsed < 11) activeDot = 0;
     else if (elapsed < 16) activeDot = 1;
     else if (elapsed < 22) activeDot = 2;
-    else activeDot = 3; //last stop
+    else activeDot = 3;
   }
 
-p.mousePressed = function() {
-  // Checks if the mouse is actually inside this scene's canvas
-  if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+  function updateScene6ButtonState() {
+    scene6ButtonVisible = (activeDot === 3 && !scene6Leaving);
 
-  // STATE 1: Ticket Stamping Logic
-  if (scene6State === 1 && hasStamped === false) {
-    let stampX = p.width / 2 + 140; 
-    let stampY = p.height / 2 + 60; 
-    let d = p.dist(p.mouseX, p.mouseY, stampX, stampY);
-    
-    if (d < 45) {
-      hasStamped = true;
-      stampTime = p.millis(); //records the time the stamp was clicked so it waits for a bit
-      if (stampClick) stampClick.play();
-      if (rollingSuitcase) rollingSuitcase.play();
+    if (!scene6ButtonVisible) {
+      scene6ButtonHovered = false;
+      return;
+    }
+
+    const bx = p.width * 0.72;
+    const by = p.height * 0.82;
+    const bw = p.width * 0.20;
+    const bh = 54;
+
+    scene6ButtonHovered =
+      p.mouseX >= bx &&
+      p.mouseX <= bx + bw &&
+      p.mouseY >= by &&
+      p.mouseY <= by + bh &&
+      !scene6ButtonLocked;
+  }
+
+  function drawScene6NextButton() {
+    if (!scene6ButtonVisible) return;
+
+    const bx = p.width * 0.72;
+    const by = p.height * 0.82;
+    const bw = p.width * 0.20;
+    const bh = 54;
+
+    p.push();
+
+    if (scene6ButtonHovered) {
+      p.drawingContext.shadowBlur = 25;
+      p.drawingContext.shadowColor = 'rgba(255,255,255,0.35)';
+    } else {
+      p.drawingContext.shadowBlur = 0;
+    }
+
+    p.noStroke();
+    p.fill(scene6ButtonLocked ? 'rgba(70,70,70,0.85)' : 'rgba(46,41,28,0.72)');
+    p.rectMode(p.CORNER);
+    p.rect(bx, by, bw, bh, 999);
+
+    p.stroke('rgba(255,244,220,0.28)');
+    p.strokeWeight(1.2);
+    p.noFill();
+    p.rect(bx, by, bw, bh, 999);
+
+    p.noStroke();
+    p.fill('#FFF7E8');
+    p.textAlign(p.CENTER, p.CENTER);
+    p.textSize(16);
+    p.text("Exit the train", bx + bw / 2, by + bh / 2 + 1);
+
+    p.pop();
+  }
+
+  function goToScene7() {
+    if (scene6Leaving || scene6ButtonLocked) return;
+
+    scene6Leaving = true;
+    scene6ButtonLocked = true;
+    scene6ButtonHovered = false;
+
+    stationAmbience.immediateStop();
+    trainRide.immediateStop();
+
+    if (window.resetScene7Intro) {
+      window.resetScene7Intro();
+    }
+
+    setScene6ScrollLock(false);
+
+    const appEl = document.getElementById("app");
+    if (appEl) {
+      appEl.style.overflowY = "auto";
+    }
+
+    const nextScene = document.getElementById("scene-7");
+    if (nextScene) {
+      setTimeout(function() {
+        nextScene.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+      }, 180);
     }
   }
-  
-  //
-  // Once the train reaches the last dot (activeDot 3), click to move to scene 7
-  if (scene6State === 2 && activeDot === 3) {
-      unlockNextScene(); 
-  }
-}; //end of mousePressed
 
-function unlockNextScene() {
-  //
-  document.body.style.overflowY = "auto";
+  p.mousePressed = function() {
+    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+    if (scene6Leaving) return;
 
-  // scene 7 timer to reset 
-  if (window.resetScene7Intro) {
-    window.resetScene7Intro();
-  }
+    if (scene6State === 1 && hasStamped === false) {
+      let stampX = p.width / 2 + 140;
+      let stampY = p.height / 2 + 60;
+      let d = p.dist(p.mouseX, p.mouseY, stampX, stampY);
 
-  //find scene 7 and scroll to it using the window's offset
-  const nextScene = document.getElementById("scene-7");
-  if (nextScene) {
-    window.scrollTo({
-      top: nextScene.offsetTop,
-      behavior: "smooth"
-    });
-  }
-}
+      if (d < 45) {
+        hasStamped = true;
+        stampTime = p.millis();
+        if (stampClick) stampClick.play();
+        if (rollingSuitcase) rollingSuitcase.play();
+        return;
+      }
+    }
+
+    if (scene6State === 2 && scene6ButtonVisible && scene6ButtonHovered) {
+      goToScene7();
+      return;
+    }
+  };
 
   p.windowResized = function() {
     let container = document.getElementById("scene-6-container");
-    if (container) p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+    if (container) {
+      p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+    }
   };
 }, "scene-6-container");
-
 
 /* =========================================================
    SCENE 7 — COMING BACK HOME
 ========================================================= */
+
+let scene6ScrollLocked = false;
+
+function setScene6ScrollLock(locked) {
+  scene6ScrollLocked = locked;
+  const appEl = document.getElementById("app");
+  if (appEl) appEl.style.overflowY = locked ? "hidden" : "auto";
+}
+
+window.addEventListener("wheel", function (event) {
+  if (!scene6ScrollLocked) return;
+  event.preventDefault();
+}, { passive: false });
+
+window.addEventListener("touchmove", function (event) {
+  if (!scene6ScrollLocked) return;
+  event.preventDefault();
+}, { passive: false });
+
+window.addEventListener("keydown", function (event) {
+  if (!scene6ScrollLocked) return;
+  if (!["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) return;
+  event.preventDefault();
+});
 
 new p5(function (p) {
   let sceneEl7;
@@ -3741,6 +3845,8 @@ new p5(function (p) {
 
   let particles7 = [];
   let grass7 = [];
+
+  let ambientScene7 = new AudioChannel('sounds/scene7/ambientfinal.mp3', true, 0.32);
 
   /*
     Scene 7 state:
@@ -3771,6 +3877,9 @@ new p5(function (p) {
     p.pixelDensity(1);
     p.noStroke();
 
+    ambientScene7.arm();
+    ambientScene7.setTarget(0);
+
     initScene7();
     resetScene7();
 
@@ -3782,12 +3891,18 @@ new p5(function (p) {
   /*
     Main draw loop for Scene 7.
   */
-  p.draw = function () {
-    const t = p.millis();
-    const elapsed = t - state7.startedAt;
-    const sunProgress = p.constrain(elapsed / 10000, 0, 1);
+p.draw = function () {
+  const t = p.millis();
+  const elapsed = t - state7.startedAt;
+  const sunProgress = p.constrain(elapsed / 10000, 0, 1);
 
-    updateScene7Texts(elapsed);
+  const sceneRect = sceneEl7 ? sceneEl7.getBoundingClientRect() : null;
+  const scene7Visible = !!sceneRect && sceneRect.top < window.innerHeight && sceneRect.bottom > 0;
+
+  ambientScene7.setTarget(scene7Visible ? 0.32 : 0);
+  ambientScene7.update(p);
+
+  updateScene7Texts(elapsed);
 
     drawLandscapeSky(p, t, 0.28 + sunProgress * 0.55);
     drawLandscapeMountains(p, t, 0.28 + sunProgress * 0.55);
@@ -3887,6 +4002,9 @@ new p5(function (p) {
     state7.startedAt = p.millis();
     state7.textShown = [false, false, false];
 
+    ambientScene7.immediateStop();
+    ambientScene7.setTarget(0);
+
     for (const key in textEls7) {
       if (textEls7[key]) textEls7[key].classList.remove("active");
     }
@@ -3898,17 +4016,17 @@ new p5(function (p) {
     Shows Scene 7 text blocks over time.
   */
   function updateScene7Texts(elapsed) {
-    if (elapsed >= 3000 && !state7.textShown[0]) {
+    if (elapsed >= 5000 && !state7.textShown[0]) {
       state7.textShown[0] = true;
       if (textEls7.one) textEls7.one.classList.add("active");
     }
 
-    if (elapsed >= 6000 && !state7.textShown[1]) {
+    if (elapsed >= 10000 && !state7.textShown[1]) {
       state7.textShown[1] = true;
       if (textEls7.two) textEls7.two.classList.add("active");
     }
 
-    if (elapsed >= 9000 && !state7.textShown[2]) {
+    if (elapsed >= 15000 && !state7.textShown[2]) {
       state7.textShown[2] = true;
       if (textEls7.three) textEls7.three.classList.add("active");
     }
@@ -3922,22 +4040,27 @@ new p5(function (p) {
     - Scene 7 reset
     - scroll back to top / Scene 1
   */
-  function restartStoryJourney() {
-    const appEl = document.getElementById("app");
-    const scene1 = document.getElementById("scene-1");
+function restartStoryJourney() {
+  const appEl = document.getElementById("app");
+  const scene1 = document.getElementById("scene-1");
 
-    if (window.resetScene1Story) window.resetScene1Story();
-    if (window.resetScene2Story) window.resetScene2Story();
-    if (window.resetScene3Intro) window.resetScene3Intro();
-    if (window.resetScene7Intro) window.resetScene7Intro();
+  if (window.resetScene1Story) window.resetScene1Story();
+  if (window.resetScene2Story) window.resetScene2Story();
+  if (window.resetScene3Intro) window.resetScene3Intro();
+  if (window.resetScene7Intro) window.resetScene7Intro();
 
-    if (appEl) {
-      appEl.style.overflowY = "hidden";
-      appEl.scrollTo({ top: 0, behavior: "smooth" });
-    } else if (scene1) {
-      scene1.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+  ambientScene7.immediateStop();
+
+  setScene6ScrollLock(false);
+  setScene45ScrollLock(false);
+  setScene3ScrollLock(false);
+
+  if (appEl) {
+    appEl.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (scene1) {
+    scene1.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+}
 
   /*
     Resize handler for Scene 7.

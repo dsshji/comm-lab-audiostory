@@ -29,6 +29,7 @@ body {
   height: 100vh;
   overflow: hidden;
   scroll-snap-align: start;
+  align-items: center;
 }
 
 #p5-container,
@@ -121,7 +122,8 @@ canvas {
   bottom: 24px;
   transform: translateX(-50%);
   z-index: 3;
-  padding: 10px 14px;
+  width: min(760px, 88vw);
+  padding: 10px 16px;
   border-radius: 999px;
   background: rgba(18, 20, 18, 0.2);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -130,6 +132,7 @@ canvas {
   letter-spacing: 0.02em;
   opacity: 0.88;
   transition: opacity 0.6s ease, visibility 0.6s ease;
+  text-align: center;
 }
 
 .hint-chip.hidden {
@@ -320,7 +323,7 @@ canvas {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.6s ease, transform 0.6s ease, visibility 0.6s ease;
+  transition: opacity 1.4s ease, transform 1.4s ease, visibility 1.4s ease;
   pointer-events: none;
   text-align: center;
 }
@@ -338,7 +341,7 @@ canvas {
 }
 
 #scene-7-text-1 {
-  top: 34%;
+  top: 28%;
 }
 
 #scene-7-text-2 {
@@ -346,7 +349,7 @@ canvas {
 }
 
 #scene-7-text-3 {
-  top: 58%;
+  top: 64%;
 }
 
 .scene-7-restart-btn {
@@ -409,9 +412,9 @@ canvas {
     font-size: 13px;
   }
 
-  #scene-7-text-1 { top: 32%; }
-  #scene-7-text-2 { top: 45%; }
-  #scene-7-text-3 { top: 58%; }
+#scene-7-text-1 { top: 24%; }
+#scene-7-text-2 { top: 46%; }
+#scene-7-text-3 { top: 68%; }
 
   .scene-7-restart-btn {
     top: 18px;
@@ -460,8 +463,8 @@ canvas {
 #s3-button {
   pointer-events: auto; /* is clickable now*/
   position: absolute;
-  top: 40%; /* adjusetd*/
-  right: 12%;/* adjusted*/
+  top: 30%;
+  right: 50%;
   transform: translate(-50%, -50%);
   z-index: 999;
   padding: 12px 18px;
