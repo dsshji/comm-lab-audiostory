@@ -3455,513 +3455,270 @@ new p5(function (p) {
 }, "scene-4-container");
 
 
-
 /* =========================================================
-
-SCENE 6 — THE TRAIN STATION
-
+   SCENE 6 — THE TRAIN STATION
 ========================================================= */
 
-
-
 new p5(function (p) {
-
-let scene6State = 1;
-
-let ticketY = 0; //ticket moves down after click
-
-let hasStamped = false; //checks if ticket is stamped
-
-let stampTime = 0;
-
-let activeDot = 0; //tracks the stops on trainline (what dot (destination) is lit up)
-
-let lastDotChange = 0; //stores time when train ride starts
-
-
-
-//sounds/audios
-
-let stationAmbience = new AudioChannel('sounds/scene6/stationAmbience.mp3', true, 0.5);
-
-let trainRide = new AudioChannel('sounds/scene6/pan_trainstopping.mp3', true, 0.8);
-
-
-//preloaded sounds for sounds that play once
-
-let stampClick;
-
-let rollingSuitcase;
-
-
-
-p.setup = function() {
-
-let container = document.getElementById("scene-6-container");
-
-p.createCanvas(container.offsetWidth, container.offsetHeight);
-
-
-
-//prevents looping for soudns played once (AudioOnce class)
-
-stampClick = new AudioOnce('sounds/scene6/ticketvalidationstamp.mp3', 1.0);
-
-rollingSuitcase = new AudioOnce('sounds/scene6/rollingSuitcase.mp3', 0.6);
-
-
-
-//arm the audio channels
-
-stationAmbience.arm();
-
-trainRide.arm();
-
-stampClick.arm();
-
-rollingSuitcase.arm();
-
-
-
-//ensure everything is quiet until we are centered on the scene so they dont overlap
-
-stationAmbience.setTarget(0);
-
-trainRide.setTarget(0);
-
-};
-
-
-
-p.draw = function() {
-
-p.background('#a3a49f');
-
-
-
-//update the audio channels every frame
-
-stationAmbience.update(p);
-
-trainRide.update(p);
-
-
-
-let scene = document.getElementById("scene-6");
-
-let position = scene.getBoundingClientRect();
-
-
-//checks if scene 6 is currently in view
-
-let isCentered = (position.top < p.windowHeight / 2 && position.bottom > p.windowHeight / 2);
-
-
-
-if (isCentered) {
-
-if (scene6State === 1) {
-
-stationAmbience.setTarget(0.5);
-
-trainRide.setTarget(0);
-
-stationBackground();
-
-displayTicket();
-
-}
-
-else if (scene6State === 2) {
-
-stationAmbience.setTarget(0);
-
-trainRide.setTarget(0.8);
-
-trainInterior();
-
-updateMapProgress();
-
-}
-
-}
-
-else {
-
-// kill sounds if user scrolls away
-
-stationAmbience.setTarget(0);
-
-trainRide.setTarget(0);
-
-}
-
-};
-
-
-
-function stationBackground() {
-
-p.push();
-
-p.rectMode(p.CORNER);
-
-
-//wall of train station
-
-p.fill('#BCBCBC');
-
-p.noStroke();
-
-p.rect(0, 0, p.width, p.height);
-
-
-//entrance of station (Sized down more)
-
-p.fill(80);
-
-let entranceWidth = p.width * 0.6;
-
-let entranceX = (p.width - entranceWidth) / 2;
-
-p.rect(entranceX, p.height * 0.35, entranceWidth, p.height * 0.65);
-
-
-//sign at the top
-
-p.fill('#444B53');
-
-p.rect(0, 0, p.width * 1.2, 50);
-
-
-//text in sign that says "train station"
-
-p.fill(255);
-
-p.textAlign(p.CENTER, p.CENTER);
-
-p.textFont('Arial');
-
-p.textSize(20);
-
-p.text("TRAIN STATION", p.width / 2, 25);
-
-
-p.pop();
-
-} //end of stationBackground
-
-
-
-function trainInterior() {
-
-p.push();
-
-p.fill('#E5E5E5');
-
-p.noStroke();
-
-p.rect(0, 0, p.width, p.height);
-
-
-
-let doorHeight = 350;
-
-let doorWidth = 140;
-
-let doorOffset = 75;
-
-
-// train doors
-
-if (activeDot === 3) {
-
-p.drawingContext.shadowBlur = 60;
-
-p.drawingContext.shadowColor = 'rgba(255, 255, 255, 0.8)';
-
-p.fill('#b6b2b2'); //door lighter color when destination reached
-
-p.stroke(255);
-
-p.strokeWeight(2);
-
-} else {
-
-p.fill('#7d838a'); //door color
-
-p.noStroke();
-
-}
-
-
-p.rectMode(p.CENTER);
-
-//main door panels
-
-p.rect(p.width/2 - doorOffset, p.height/2 + 60, doorWidth, doorHeight, 5);
-
-p.rect(p.width/2 + doorOffset, p.height/2 + 60, doorWidth, doorHeight, 5);
-
-
-p.drawingContext.shadowBlur = 0;
-
-p.fill('#A8DADC');
-
-p.noStroke();
-
-//windows centered on the door panels
-
-p.rect(p.width/2 - doorOffset, p.height/2 + 30, 90, 140, 15);
-
-p.rect(p.width/2 + doorOffset, p.height/2 + 30, 90, 140, 15);
-
-
-
-//TRAIN LINE MAP
-
-let mapY = p.height * 0.15;
-
-p.fill(255);
-
-p.rect(p.width/2, mapY, 280, 30, 5);
-
-
-p.stroke('#BDBDBD');
-
-p.strokeWeight(2);
-
-let startX = p.width/2 - 100;
-
-let endX = p.width/2 + 100;
-
-p.line(startX, mapY, endX, mapY);
-
-
-
-p.noStroke();
-
-for (let i = 0; i < 4; i++) {
-
-let x = p.map(i, 0, 3, startX, endX);
-
-if (i === activeDot) {
-
-p.fill('#FF516E');
-
-p.ellipse(x, mapY, 12);
-
-} else {
-
-p.fill('#BDBDBD');
-
-p.ellipse(x, mapY, 8);
-
-}
-
-}
-
-p.pop();
-
-} //end of trainInterior
-
-
-
-function displayTicket() {
-
-p.push();
-
-p.translate(p.width / 2, p.height / 2 + ticketY);
-
-
-p.fill('#A8DADC');
-
-p.stroke(255, 100);
-
-p.strokeWeight(2);
-
-p.rectMode(p.CENTER);
-
-p.rect(0, 0, 300, 180, 10);
-
-
-
-p.fill(40);
-
-p.noStroke();
-
-p.textAlign(p.LEFT);
-
-p.textFont('Courier New');
-
-p.textSize(16);
-
-p.text("RAIL PASS", -130, -50);
-
-p.textSize(9);
-
-p.text("ADULT STANDARD CLASS", -130, -38);
-
-p.textSize(10);
-
-p.text("YEAR-MONTH-DAY", -130, 25);
-
-p.textSize(18);
-
-p.text("2026 . 04 . 08", -130, 48);
-
-
-
-p.noFill();
-
-p.stroke(40);
-
-p.strokeWeight(1);
-
-p.drawingContext.setLineDash([6, 4]);
-
-p.ellipse(90, 40, 60);
-
-p.drawingContext.setLineDash([]);
-
-
-
-if (hasStamped === true) {
-
-p.fill('rgba(255, 60, 60, 0.7)');
-
-p.noStroke();
-
-p.ellipse(90, 40, 55);
-
-p.fill(150, 0, 0);
-
-p.textAlign(p.CENTER);
-
-p.textSize(10);
-
-p.text("VALIDATED", 90, 44);
-
-
-let currentTime = p.millis();
-
-if (currentTime - stampTime > 1500) {
-
-ticketY += 20;
-
-}
-
-
-if (ticketY > p.height) {
-
-scene6State = 2;
-
-lastDotChange = p.millis();
-
-}
-
-}
-
-p.pop();
-
-}
-
-
-
-function updateMapProgress() {
-
-let elapsed = (p.millis() - lastDotChange) / 1000;
-
-if (elapsed < 11) activeDot = 0;
-
-else if (elapsed < 16) activeDot = 1;
-
-else if (elapsed < 22) activeDot = 2;
-
-else activeDot = 3;
-
-}
-
-
-
-p.mousePressed = function() {
-
-if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
-
-
-
-if (scene6State === 1 && hasStamped === false) {
-
-let stampX = p.width / 2 + 90;
-
-let stampY = p.height / 2 + 40;
-
-
-if (p.dist(p.mouseX, p.mouseY, stampX, stampY) < 30) {
-
-hasStamped = true;
-
-stampTime = p.millis();
-
-
-
-if (stampClick) stampClick.play();
-
-if (rollingSuitcase) rollingSuitcase.play();
-
-}
-
-}
-
-
-if (scene6State === 2 && activeDot === 3) {
-
-if (p.dist(p.mouseX, p.mouseY, p.width/2, p.height/2 + 60) < 100) {
-
-unlockNextScene();
-
-}
-
-}
-
-};
-
-
-
-function unlockNextScene() {
-
-const appEl = document.getElementById("app");
-
-if (appEl) appEl.style.overflowY = "auto";
-
-if (window.resetScene7Intro) window.resetScene7Intro();
-
-
-
-const nextScene = document.getElementById("scene-7");
-
-if (nextScene) {
-
-setTimeout(() => {
-
-nextScene.scrollIntoView({ behavior: "smooth", block: "start" });
-
-}, 300);
-
-}
-
-}
-
-
-
-p.windowResized = function() {
-
-let container = document.getElementById("scene-6-container");
-
-if (container) p.resizeCanvas(container.offsetWidth, container.offsetHeight);
-
-};
-
+  let scene6State = 1; 
+  let ticketY = 0; //ticket moves down after click
+  let hasStamped = false; //checks if ticket is stamped
+  let stampTime = 0; 
+  let activeDot = 0; //tracks the stops on trainline (what dot (destination) is lit up)
+  let lastDotChange = 0; //stores time when train ride starts
+
+  //sounds/audios
+  let stationAmbience = new AudioChannel('sounds/scene6/stationAmbience.mp3', true, 0.5);
+  let trainRide = new AudioChannel('sounds/scene6/pan_trainstopping.mp3', true, 0.8); 
+  
+  //preloaded sounds for sounds that play once
+  let stampClick;
+  let rollingSuitcase;
+
+  p.setup = function() {
+    let container = document.getElementById("scene-6-container");
+    p.createCanvas(container.offsetWidth, container.offsetHeight);
+
+    //prevents looping for soudns played once (AudioOnce class)
+    stampClick = new AudioOnce('sounds/scene6/ticketvalidationstamp.mp3', 1.0);
+    rollingSuitcase = new AudioOnce('sounds/scene6/rollingSuitcase.mp3', 0.6);
+
+    //arm the audio channels
+    stationAmbience.arm();
+    trainRide.arm();
+    stampClick.arm();
+    rollingSuitcase.arm();
+
+    //ensure everything is quiet until we are centered on the scene so they dont overlap
+    stationAmbience.setTarget(0);
+    trainRide.setTarget(0);
+  };
+
+  p.draw = function() {
+    p.background('#a3a49f'); 
+
+    //update the audio channels every frame
+    stationAmbience.update(p);
+    trainRide.update(p);
+
+    let scene = document.getElementById("scene-6");
+    let position = scene.getBoundingClientRect();
+    
+    //checks if scene 6 is currently in view
+    let isCentered = (position.top < p.windowHeight / 2 && position.bottom > p.windowHeight / 2);
+
+    if (isCentered) {
+      if (scene6State === 1) {
+        stationAmbience.setTarget(0.5);
+        trainRide.setTarget(0);
+        stationBackground();
+        displayTicket();
+      } 
+      else if (scene6State === 2) {
+        stationAmbience.setTarget(0);
+        trainRide.setTarget(0.8);
+        trainInterior();
+        updateMapProgress();
+      }
+    } 
+    else {
+      // kill sounds if user scrolls away
+      stationAmbience.setTarget(0);
+      trainRide.setTarget(0);
+    }
+  };
+
+  function stationBackground() {
+    p.push();
+    p.rectMode(p.CORNER); 
+    
+    //wall of train station
+    p.fill('#BCBCBC');
+    p.noStroke();
+    p.rect(0, 0, p.width, p.height);
+    
+    //entrance of station
+    p.fill(80); 
+    let entranceWidth = p.width * 0.8; 
+    let entranceX = (p.width - entranceWidth) / 2; // Centers the entrance
+    p.rect(entranceX, p.height * 0.25, entranceWidth, p.height * 0.8);
+    
+    //sign at the top
+    p.fill('#444B53');
+    p.rect(0, 0, p.width, 80); 
+    
+    //text in sign that says "train station"
+    p.fill(255);
+    p.textAlign(p.CENTER, p.CENTER);
+    p.textFont('Arial');
+    p.textSize(32); 
+    p.text("TRAIN STATION", p.width / 2, 40);
+    
+    p.pop();
+  } //end of stationBackground
+
+  function trainInterior() {
+    p.push();
+    p.fill('#E5E5E5');
+    p.noStroke();
+    p.rect(0, 0, p.width, p.height);
+
+    let doorHeight = 500; 
+    
+    //glow effect for doors when train reaches the last stop
+    if (activeDot === 3) {
+      p.drawingContext.shadowBlur = 60;
+      p.drawingContext.shadowColor = 'rgba(255, 255, 255, 0.8)';
+      p.fill('#CACACA'); 
+      p.stroke(255);
+      p.strokeWeight(2);
+    } else {
+      p.fill('#B7B7B7'); 
+      p.noStroke();
+    }
+    
+    p.rectMode(p.CENTER);
+    p.rect(p.width/2 - 77, p.height/2 + 50, 150, doorHeight, 5); 
+    p.rect(p.width/2 + 77, p.height/2 + 50, 150, doorHeight, 5);
+    
+    p.drawingContext.shadowBlur = 0;
+    p.fill('#A8DADC'); 
+    p.noStroke();
+    p.rect(p.width/2 - 77, p.height/2, 100, 200, 20); 
+    p.rect(p.width/2 + 77, p.height/2, 100, 200, 20);
+
+    //TRAIN LINE MAP STARTS HERE
+    p.fill(255);
+    p.rect(p.width/2, p.height/2 - 250, 400, 40, 5); 
+    
+    //connecting line (drawn behind the dots)
+    p.stroke('#BDBDBD');
+    p.strokeWeight(2);
+    let startX = p.width/2 - 150;
+    let endX = p.width/2 + 150;
+    let lineY = p.height/2 - 250;
+    p.line(startX, lineY, endX, lineY);
+
+    p.noStroke(); //resets stroke so it doesnt mess up the dots
+    
+    for (let i = 0; i < 4; i++) {
+      let x = p.map(i, 0, 3, startX, endX);
+      if (i === activeDot) {
+        p.fill('#FF516E'); 
+        p.ellipse(x, lineY, 15);
+      } else {
+        p.fill('#BDBDBD');
+        p.ellipse(x, lineY, 10);
+      }
+    }
+    p.pop();
+  } //end of trainInterior
+
+  function displayTicket() {
+    p.push();
+    p.translate(p.width / 2, p.height / 2 + ticketY);
+    
+    p.fill('#A8DADC'); 
+    p.stroke(255, 100);
+    p.strokeWeight(2);
+    p.rectMode(p.CENTER);
+    p.rect(0, 0, 450, 280, 15); 
+
+    p.fill(40);
+    p.noStroke();
+    p.textAlign(p.LEFT);
+    p.textFont('Courier New');
+    
+    p.textSize(22);
+    p.text("RAIL PASS", -200, -80);
+    p.textSize(12);
+    p.text("ADULT STANDARD CLASS", -200, -60);
+    
+    p.textSize(14);
+    p.text("YEAR-MONTH-DAY", -200, 40);
+    p.textSize(24);
+    p.text("2026 . 04 . 08", -200, 70);
+
+    p.noFill();
+    p.stroke(40);
+    p.strokeWeight(1);
+    p.drawingContext.setLineDash([6, 4]); 
+    p.ellipse(140, 60, 90); 
+    p.drawingContext.setLineDash([]); 
+
+    if (hasStamped === true) {
+      p.fill('rgba(255, 60, 60, 0.7)');
+      p.noStroke();
+      p.ellipse(140, 60, 85);
+      
+      p.fill(150, 0, 0);
+      p.textAlign(p.CENTER);
+      p.textSize(14);
+      p.text("VALIDATED", 140, 65);
+      
+      //waits 2 secs then moves
+      let currentTime = p.millis();
+      if (currentTime - stampTime > 1500) {
+        ticketY += 25; //starts moving down after 1500ms (1.5 seconds)
+      }
+      
+      if (ticketY > p.height) {
+        scene6State = 2;
+        lastDotChange = p.millis(); //starts timer for train line dots
+      }
+    }
+    p.pop();
+  }
+
+  function updateMapProgress() {
+    let elapsed = (p.millis() - lastDotChange) / 1000; //calculates the seconds that have passed since entering the train
+    if (elapsed < 11) activeDot = 0;
+    else if (elapsed < 16) activeDot = 1;
+    else if (elapsed < 22) activeDot = 2;
+    else activeDot = 3; //last stop
+  }
+
+  p.mousePressed = function() {
+    if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+
+    if (scene6State === 1 && hasStamped === false) {
+      let stampX = p.width / 2 + 140; 
+      let stampY = p.height / 2 + 60; 
+      let d = p.dist(p.mouseX, p.mouseY, stampX, stampY);
+      
+      if (d < 45) {
+        hasStamped = true;
+        stampTime = p.millis(); //records the time the stamp was clicked so it waits for a bit before moving
+        if (stampClick) stampClick.play();
+        if (rollingSuitcase) rollingSuitcase.play();
+      }
+    }
+    
+    if (scene6State === 2 && activeDot === 3) {
+      //clicking the doors once the last dot is reached to go to scene 7
+      if (p.dist(p.mouseX, p.mouseY, p.width/2, p.height/2) < 150) {
+         unlockNextScene(); 
+      }
+    }
+  }; //end of mousePressed
+
+  function unlockNextScene() {
+    const appEl = document.getElementById("app");
+    if (appEl) appEl.style.overflowY = "auto";
+    if (window.resetScene7Intro) window.resetScene7Intro();
+
+    const nextScene = document.getElementById("scene-7");
+    if (nextScene) {
+      setTimeout(() => {
+        nextScene.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 300); 
+    }
+  }
+
+  p.windowResized = function() {
+    let container = document.getElementById("scene-6-container");
+    if (container) p.resizeCanvas(container.offsetWidth, container.offsetHeight);
+  };
 }, "scene-6-container");
 
 
