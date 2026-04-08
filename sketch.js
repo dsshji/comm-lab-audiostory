@@ -3709,18 +3709,19 @@ p.mousePressed = function() {
     }
   }; //end of mousePressed
 
-  function unlockNextScene() {
-    const appEl = document.getElementById("app");
-    if (appEl) appEl.style.overflowY = "auto";
-    if (window.resetScene7Intro) window.resetScene7Intro();
+function unlockNextScene() {
+  //restart the scene 7 timer
+  if (window.resetScene7Intro) window.resetScene7Intro();
 
-    const nextScene = document.getElementById("scene-7");
-    if (nextScene) {
-      setTimeout(() => {
-        nextScene.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 300); 
-    }
+  //scroll the whole browser window to scene 7
+  const nextScene = document.getElementById("scene-7");
+  if (nextScene) {
+    window.scrollTo({
+      top: nextScene.offsetTop,
+      behavior: "smooth"
+    });
   }
+}
 
   p.windowResized = function() {
     let container = document.getElementById("scene-6-container");
