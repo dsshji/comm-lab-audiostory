@@ -482,6 +482,13 @@ canvas {
   display: none;
 }
 
+/* container height for proper sizing */
+#scene-4-container,
+#scene-5-container {
+  width: 100%;
+  height: 100vh; /* force full screen */
+}
+
 /* scene6 text boxes */
 /*.s6-box {
   position: absolute;
