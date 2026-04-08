@@ -3678,7 +3678,7 @@ new p5(function (p) {
     else activeDot = 3; //last stop
   }
 
-  p.mousePressed = function() {
+p.mousePressed = function() {
     if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
 
     if (scene6State === 1 && hasStamped === false) {
@@ -3695,8 +3695,15 @@ new p5(function (p) {
     }
     
     if (scene6State === 2 && activeDot === 3) {
-      //clicking the doors once the last dot is reached to go to scene 7
-      if (p.dist(p.mouseX, p.mouseY, p.width/2, p.height/2) < 150) {
+      // CLICK FIX
+      let isInsideDoors = (
+        p.mouseX > p.width/2 - 160 && 
+        p.mouseX < p.width/2 + 160 && 
+        p.mouseY > p.height/2 - 200 && 
+        p.mouseY < p.height/2 + 300
+      );
+
+      if (isInsideDoors) {
          unlockNextScene(); 
       }
     }
