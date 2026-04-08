@@ -460,8 +460,8 @@ canvas {
 #s3-button {
   pointer-events: auto; /* is clickable now*/
   position: absolute;
-  top: 30%;
-  right: 50%;
+  top: 40%; /* adjusetd*/
+  right: 12%;/* adjusted*/
   transform: translate(-50%, -50%);
   z-index: 999;
   padding: 12px 18px;
